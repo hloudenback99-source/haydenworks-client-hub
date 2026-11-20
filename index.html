@@ -440,6 +440,41 @@ window.CLIENT_HUB_CONFIG = {
       "mode": "sandbox",
       "live_charges_enabled": false,
       "status": "PROPOSED, not configured: this build holds no payment sandbox keys, so the purchase control stays disabled and no payment can be taken. Credits are issued only after a confirmed payment event, never by a browser returning from checkout."
+    },
+    "purchase": {
+      "status": "Configuration slot for the follow-up release purchase flow (plan/FOLLOWUP-DESIGN.md section 3). The options mirror the Phase 5 price table in the server helpdesk module (the pack table and the subscription constants). checkout_url stays null and live_charges_enabled stays false until Hayden gives the billing go-live word and a checkout surface exists; until then the purchase control renders a truthful not-available state and no charge can be made.",
+      "live_charges_enabled": false,
+      "checkout_url": null,
+      "options": [
+        {
+          "id": "pack-5",
+          "kind": "pack",
+          "label": "5 credits",
+          "credits": 5,
+          "price_cents": 15000
+        },
+        {
+          "id": "pack-10",
+          "kind": "pack",
+          "label": "10 credits",
+          "credits": 10,
+          "price_cents": 28500
+        },
+        {
+          "id": "pack-25",
+          "kind": "pack",
+          "label": "25 credits",
+          "credits": 25,
+          "price_cents": 67500
+        },
+        {
+          "id": "subscription",
+          "kind": "subscription",
+          "label": "Subscription: 4 credits per month",
+          "credits_per_month": 4,
+          "price_cents": 11900
+        }
+      ]
     }
   },
   "hosting": {
