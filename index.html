@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>HW Client Hub v1.2.2 — Come Get Funded</title>
+  <meta name="description" content="HaydenWorks Client Hub v1.2.2 multi-screen native Client Hub for Regene / Come Get Funded with Hello physics and hardened actions.">
+  <link rel="stylesheet" href="./assets/styles.css">
+</head>
+<body>
+  <div class="brand"><span class="mark"></span><span>HaydenWorks Client Hub</span></div>
+  <div class="runtime"><i></i><span>v1.2.2 hello physics + hardened actions</span></div>
+  <main id="app">
+    <section id="scene-hello" class="scene active">
+      <div id="helloObject" class="hello-body" role="button" tabindex="0" aria-label="Tap Hello to activate the intro physics or wait for secure access.">
+        <h1 class="hello">Hello.</h1>
+        <p class="hello-sub">Preparing the private Come Get Funded workspace.</p>
+        <p class="hello-tip">Tap Hello to play. Waiting continues automatically.</p>
+      </div>
+    </section>
+    <section id="scene-access" class="scene">
+      <div class="access-card">
+        <p class="kicker">Protected client workspace</p>
+        <h1 class="title">Come Get Funded</h1>
+        <p class="subtitle">A focused, screen-based GBrands Lite Client Hub for Regene Du Preez.</p>
+        <div class="grid2">
+          <div class="notice"><strong>Production access</strong><br>Cloudflare Access should protect the live route with an approved-email policy. The static shell does not store client credentials.</div>
+          <div class="notice"><strong>Native display rule</strong><br>Links and previews appear inside focused screens instead of stacking everything onto one overview page.</div>
+        </div>
+        <div class="screen-actions"><button id="enterBtn" type="button" class="btn primary">Enter Hub</button><button id="skipIntro" type="button" class="btn ghost">Skip intro</button><button id="securityBtn" type="button" class="btn ghost">Security rules</button></div>
+      </div>
+    </section>
+    <section id="scene-welcome" class="scene"><div><h1 class="hello">Welcome.</h1><p class="hello-sub">Opening the private Client Hub menu.</p></div></section>
+    <section id="scene-menu" class="scene scrollable">
+      <div class="menu-layout">
+        <div class="menu-card">
+          <div class="package-row"><div><p class="kicker"><span id="clientName"></span> · <span id="ownerName"></span></p><h1 id="packageTitle" class="title"></h1><p id="clientMessage" class="subtitle"></p></div><span class="status-pill">Live links connected</span></div>
+          <div class="phase-line"><div><div id="phaseName" class="phase"></div><div class="quiet">Current phase</div></div><div><strong id="progressText"></strong><br><span id="stepName" class="quiet"></span></div></div>
+          <div class="progress"><div id="progressBar" class="bar"></div></div><div id="phaseRail" class="phase-rail"></div>
+          <div class="screen-actions"><button type="button" class="btn primary" data-screen="opportunity_hq">Start with Opportunity HQ</button><button type="button" class="btn ghost" data-screen="handoff">Final Hand-Off</button></div>
+        </div>
+        <div id="navPanel" class="nav-panel" aria-label="Client Hub screens"></div>
+        <div class="footer-note"><span>Every major area opens as its own focused screen.</span><span>No production deployment or live auth is connected in this package.</span></div>
+      </div>
+    </section>
+    <section id="scene-focus" class="scene scrollable">
+      <div class="focus-inner"><div class="focus-shell">
+        <header class="focus-head"><div class="focus-title"><p id="focusKicker" class="kicker"></p><h1 id="focusTitle"></h1><p id="focusSubtitle" class="subtitle"></p></div><button id="backToMenu" type="button" class="btn ghost">← Back to Hub</button></header>
+        <div id="focusBody" class="focus-body"></div>
+      </div></div>
+    </section>
+    <div id="actionStatus" class="action-status" role="status" aria-live="polite"></div>
+  </main>
+  <script>
+window.CLIENT_HUB_STATE = {
+  "schema_version": "1.2.2",
+  "build": "HW Client Hub v1.2.2 — Regene / Come Get Funded Hello Physics + Action Hardening",
+  "environment": "deployable_mvp_static_shell_multiscreen_native_previews",
+  "generated_at": "2026-09-30 00:19 CT",
+  "client": {
+    "client_id": "cgf-regene-gbrands-lite-001",
+    "client_name": "Come Get Funded",
+    "owner_name": "Regene Du Preez",
+    "package_key": "gbrands_lite",
+    "package_name": "GBrands Lite",
+    "client_slug": "come-get-funded",
+    "deal_stage": "Launched",
+    "service_package": "GBrandsLite",
+    "access_model": "Cloudflare Access approved email policy; do not store client credentials in shell"
+  },
+  "current_state": {
+    "phase": "HAND-OFF",
+    "step_key": "handoff_ready",
+    "phase_progress": 96,
+    "overall_progress": 96,
+    "status_label": "Multi-screen Hub restored",
+    "client_message": "Come Get Funded is launched. Use the private Hub menu to review Opportunity HQ, board previews, brand assets, concepts, documents, website status, support, and hand-off screens.",
+    "internal_status": "v1_2_2_hello_physics_action_hardening_ready_for_review"
+  },
+  "source_summary": {
+    "launched": "Come Get Funded completed launch September 4, 2026 and was reconfirmed as fully launched September 10.",
+    "provider_pathways": [
+      "DealFunding360",
+      "Breeze Financial"
+    ],
+    "opportunity_hq_status": "Opportunity HQ [Lite] build active; core HQ shell, client opportunity board, internal opportunity vault, pipeline views, insights, and scanner-status controls exist.",
+    "unresolved_external_release_items": [
+      "Cloudflare Pages preview URL",
+      "Cloudflare Access policy",
+      "public website/view URL if different from Google Sites edit URL",
+      "Help Desk scheduling link if not using direct support"
+    ]
+  },
+  "links": {
+    "regene_notion_page": "https://app.notion.com/p/3aee37f19a78817989abcc2ca4207851?pvs=204",
+    "opportunity_hq_lite": "https://app.notion.com/p/3e1e37f19a78815ca656e4f3cd2ad53f?pvs=204",
+    "opportunity_dashboard": "https://app.notion.com/p/3e1e37f19a78814aa305ea053c044d12?pvs=204",
+    "insights": "https://app.notion.com/p/3e1e37f19a7881b798e4f36d41bc6829?pvs=204",
+    "provider_funding_insights": "https://app.notion.com/p/3e1e37f19a7881338774efd317a8754f?pvs=204",
+    "targeting_scanner_status": "https://app.notion.com/p/3e1e37f19a7881b0848fdad4e05450cd?pvs=204",
+    "opportunity_board": "https://app.notion.com/p/250eb4b4aaae4f33b1ba556aed80c414?pvs=204",
+    "internal_control": "https://app.notion.com/p/3e1e37f19a788100a4f1f8c0dcd7cfef?pvs=204",
+    "client_drive_folder": "https://drive.google.com/drive/folders/1yAX0pEYzAIEZogg3Fglh3rSYWAxca_-9",
+    "assets_folder": "https://drive.google.com/drive/folders/1OMjBj0WUAhmOeQNPJ5bVxNqMxT_nt7HV",
+    "concepts_folder": "https://drive.google.com/drive/folders/1qwRvdG7krNGshyf-ThRIiLdWYvP0fZ6M",
+    "site_edit": "https://sites.google.com/d/1AXMo44U4uHWjK91oe2qHCV4kfxEHr4Iz/edit",
+    "brand_breakdown_pdf": "https://drive.google.com/file/d/1m4ItafHMEb1-vgqIS1FVUCNriJ9F_DHE/view?usp=drivesdk",
+    "brand_breakdown_preview": "https://drive.google.com/file/d/1m4ItafHMEb1-vgqIS1FVUCNriJ9F_DHE/preview",
+    "sm_pro_blueprint_pdf": "https://drive.google.com/file/d/1nPc4u2eGaO1VvckbSD-u-oACE508yDRs/view?usp=drivesdk",
+    "sm_pro_blueprint_preview": "https://drive.google.com/file/d/1nPc4u2eGaO1VvckbSD-u-oACE508yDRs/preview",
+    "assets_folder_embed": "https://drive.google.com/embeddedfolderview?id=1OMjBj0WUAhmOeQNPJ5bVxNqMxT_nt7HV#grid",
+    "concepts_folder_embed": "https://drive.google.com/embeddedfolderview?id=1qwRvdG7krNGshyf-ThRIiLdWYvP0fZ6M#grid"
+  },
+  "native_display": {
+    "brand_assets": [
+      {
+        "label": "Banner — White",
+        "type": "image/png",
+        "url": "https://drive.google.com/file/d/1Q___LRN9KrAv0e01p1Vcd_Tewsf_uLJp/view?usp=drivesdk",
+        "native_url": "https://drive.google.com/thumbnail?id=1Q___LRN9KrAv0e01p1Vcd_Tewsf_uLJp&sz=w1200",
+        "display": "native_image"
+      },
+      {
+        "label": "Banner — Black",
+        "type": "image/png",
+        "url": "https://drive.google.com/file/d/1SbVQjrsPijJMWcZ83tb7J48JcydCvT0e/view?usp=drivesdk",
+        "native_url": "https://drive.google.com/thumbnail?id=1SbVQjrsPijJMWcZ83tb7J48JcydCvT0e&sz=w1200",
+        "display": "native_image"
+      },
+      {
+        "label": "Logo — White",
+        "type": "image/png",
+        "url": "https://drive.google.com/file/d/1uw5LQmGnEXg7fczYCdJ2OG4ylrWMPmOt/view?usp=drivesdk",
+        "native_url": "https://drive.google.com/thumbnail?id=1uw5LQmGnEXg7fczYCdJ2OG4ylrWMPmOt&sz=w1200",
+        "display": "native_image"
+      },
+      {
+        "label": "Logo — Black",
+        "type": "image/png",
+        "url": "https://drive.google.com/file/d/11U-o2vLbW7aKeaaatH-5bgpE8a5DcLVE/view?usp=drivesdk",
+        "native_url": "https://drive.google.com/thumbnail?id=11U-o2vLbW7aKeaaatH-5bgpE8a5DcLVE&sz=w1200",
+        "display": "native_image"
+      },
+      {
+        "label": "Icon",
+        "type": "image/png",
+        "url": "https://drive.google.com/file/d/1MsW5U7My4b76fZ4zx7RF-rkxNKg7q2Bb/view?usp=drivesdk",
+        "native_url": "https://drive.google.com/thumbnail?id=1MsW5U7My4b76fZ4zx7RF-rkxNKg7q2Bb&sz=w1200",
+        "display": "native_image"
+      },
+      {
+        "label": "Icon — White Outline",
+        "type": "image/png",
+        "url": "https://drive.google.com/file/d/1sLqqG-yEbSPOghJKNhK-_HaxfUdXiAud/view?usp=drivesdk",
+        "native_url": "https://drive.google.com/thumbnail?id=1sLqqG-yEbSPOghJKNhK-_HaxfUdXiAud&sz=w1200",
+        "display": "native_image"
+      }
+    ],
+    "concept_assets": [
+      {
+        "label": "Concept E",
+        "type": "image/png",
+        "url": "https://drive.google.com/file/d/1D2kM4pINlHbCsHqkSvi5i4duriwGh2OU/view?usp=drivesdk",
+        "native_url": "https://drive.google.com/thumbnail?id=1D2kM4pINlHbCsHqkSvi5i4duriwGh2OU&sz=w1200",
+        "display": "native_image"
+      },
+      {
+        "label": "Concept D",
+        "type": "image/png",
+        "url": "https://drive.google.com/file/d/122D86FRuIrH-p4xj203e2hnZpAuRu-0Z/view?usp=drivesdk",
+        "native_url": "https://drive.google.com/thumbnail?id=122D86FRuIrH-p4xj203e2hnZpAuRu-0Z&sz=w1200",
+        "display": "native_image"
+      },
+      {
+        "label": "Concept F",
+        "type": "image/png",
+        "url": "https://drive.google.com/file/d/1w796ydz_hj9lVLUbvPhgvYN0HzSnbE9j/view?usp=drivesdk",
+        "native_url": "https://drive.google.com/thumbnail?id=1w796ydz_hj9lVLUbvPhgvYN0HzSnbE9j&sz=w1200",
+        "display": "native_image"
+      }
+    ],
+    "opportunities": [
+      {
+        "contact": "Ahmad Nassar",
+        "market": "Texas",
+        "source": "TDLR",
+        "strength": "Fresh",
+        "status": "New",
+        "summary": "Texas project record shared into CGF Opportunity Board.",
+        "source_url": "https://www.tdlr.texas.gov/TABS/Projects/TABS2027001148",
+        "notion_url": "https://app.notion.com/p/3eae37f19a7881298efdcac6fbe62e01"
+      },
+      {
+        "contact": "Sergio Hernandez",
+        "market": "Media / capital context",
+        "source": "Muck Rack",
+        "strength": "Fresh",
+        "status": "New",
+        "summary": "Contact record sourced through Muck Rack and staged in CGF board.",
+        "source_url": "https://muckrack.com/sergio-hernandez-33",
+        "notion_url": "https://app.notion.com/p/3eae37f19a7881409a76ee3613a13c6e"
+      },
+      {
+        "contact": "Shaenfield Plaza",
+        "market": "Texas",
+        "source": "TDLR",
+        "strength": "Fresh",
+        "status": "New",
+        "summary": "Texas project record shared into CGF Opportunity Board.",
+        "source_url": "https://www.tdlr.texas.gov/TABS/Projects/TABS2027001919",
+        "notion_url": "https://app.notion.com/p/3eae37f19a7881af80a0fc18de77dced"
+      },
+      {
+        "contact": "James Mamary, Jr.",
+        "market": "Texas",
+        "source": "TDLR",
+        "strength": "Fresh",
+        "status": "New",
+        "summary": "Texas project record shared into CGF Opportunity Board.",
+        "source_url": "https://www.tdlr.texas.gov/TABS/Projects/TABS2027001891",
+        "notion_url": "https://app.notion.com/p/3eae37f19a7881d3b9a7d0fa8e7c52f7"
+      },
+      {
+        "contact": "James Dunn",
+        "market": "Tallahassee, Florida",
+        "source": "BiggerPockets",
+        "strength": "Strong",
+        "status": "New",
+        "summary": "Investor finishing a rehab on an LLC-owned investment property is actively exploring a no-seasoning DSCR cash-out refinance to recover capital for another near-term acquisition.",
+        "source_url": "https://www.biggerpockets.com/forums/49/topics/1300796-no-seasoning-dscr",
+        "notion_url": "https://app.notion.com/p/3e9e37f19a788141b689f08092b5e078"
+      },
+      {
+        "contact": "Shavin Patel",
+        "market": "Build-to-rent / duplex context",
+        "source": "BiggerPockets",
+        "strength": "Moderate",
+        "status": "New",
+        "summary": "Build-to-rent / duplex-related funding opportunity staged for review.",
+        "source_url": "https://www.biggerpockets.com/forums/44/topics/1294631-build-to-rent-duplex",
+        "notion_url": "https://app.notion.com/p/3e9e37f19a7881b397f9d125e9052c47"
+      },
+      {
+        "contact": "Sergio V.",
+        "market": "Miami-Dade / Broward County, Florida",
+        "source": "BiggerPockets",
+        "strength": "Moderate",
+        "status": "New",
+        "summary": "Investor/developer beginning a 1031 exchange from Boston into Southeast Florida is looking for financing for a 4–6 unit acquisition and requested commercial portfolio DSCR lender recommendations.",
+        "source_url": "https://www.biggerpockets.com/forums/517/topics/1297840-lender-recommendations-in-se-florida",
+        "notion_url": "https://app.notion.com/p/3e8e37f19a7881148461c681fdeb2608"
+      }
+    ],
+    "embeds": [
+      {
+        "label": "Brand Assets Folder",
+        "type": "drive_folder_iframe",
+        "url": "https://drive.google.com/embeddedfolderview?id=1OMjBj0WUAhmOeQNPJ5bVxNqMxT_nt7HV#grid",
+        "fallback_url": "https://drive.google.com/drive/folders/1OMjBj0WUAhmOeQNPJ5bVxNqMxT_nt7HV"
+      },
+      {
+        "label": "Concepts Folder",
+        "type": "drive_folder_iframe",
+        "url": "https://drive.google.com/embeddedfolderview?id=1qwRvdG7krNGshyf-ThRIiLdWYvP0fZ6M#grid",
+        "fallback_url": "https://drive.google.com/drive/folders/1qwRvdG7krNGshyf-ThRIiLdWYvP0fZ6M"
+      },
+      {
+        "label": "Brand Breakdown PDF",
+        "type": "drive_pdf_iframe",
+        "url": "https://drive.google.com/file/d/1m4ItafHMEb1-vgqIS1FVUCNriJ9F_DHE/preview",
+        "fallback_url": "https://drive.google.com/file/d/1m4ItafHMEb1-vgqIS1FVUCNriJ9F_DHE/view?usp=drivesdk"
+      },
+      {
+        "label": "SM Pro Blueprint Preview",
+        "type": "drive_pdf_iframe",
+        "url": "https://drive.google.com/file/d/1nPc4u2eGaO1VvckbSD-u-oACE508yDRs/preview",
+        "fallback_url": "https://drive.google.com/file/d/1nPc4u2eGaO1VvckbSD-u-oACE508yDRs/view?usp=drivesdk"
+      }
+    ]
+  },
+  "scope": {
+    "included": [
+      "Come Get Funded borrower-facing marketing/referral brand",
+      "One GBrands Lite website path",
+      "Opportunity HQ Lite native summary and link access",
+      "Drive-backed native brand asset gallery",
+      "Native opportunity board preview table",
+      "Help Desk / launch access placeholders kept gated"
+    ],
+    "excluded": [
+      "Separate LLC-facing banking/financing brand",
+      "Second website path",
+      "Credential storage inside static shell, Notion, Drive, or logs",
+      "Client-facing release before Hayden approval"
+    ]
+  },
+  "navigation": [
+    {
+      "key": "opportunity_hq",
+      "label": "Opportunity HQ",
+      "description": "Open the CGF HQ summary and native Notion page links.",
+      "screen": "opportunity_hq"
+    },
+    {
+      "key": "opportunity_board",
+      "label": "Opportunity Board",
+      "description": "Review native preview cards before opening the full Notion board.",
+      "screen": "opportunity_board"
+    },
+    {
+      "key": "brand_assets",
+      "label": "Brand Assets",
+      "description": "View logo, banner, icon assets as native Drive image previews.",
+      "screen": "brand_assets"
+    },
+    {
+      "key": "brand_concepts",
+      "label": "Brand Concepts",
+      "description": "Review current concept image previews from the CGF concepts folder.",
+      "screen": "brand_concepts"
+    },
+    {
+      "key": "website",
+      "label": "Website Build",
+      "description": "Open the published Come Get Funded website and the internal Google Sites build.",
+      "screen": "website"
+    },
+    {
+      "key": "documents",
+      "label": "Documents",
+      "description": "Preview PDFs and Drive folders natively inside focused screens.",
+      "screen": "documents"
+    },
+    {
+      "key": "helpdesk",
+      "label": "Help Desk",
+      "description": "Book a complimentary Help Desk session through the confirmed scheduling link.",
+      "screen": "helpdesk"
+    },
+    {
+      "key": "handoff",
+      "label": "Final Hand-Off",
+      "description": "Final asset, HQ, website, and secure-access release checklist.",
+      "screen": "handoff"
+    },
+    {
+      "key": "security",
+      "label": "Access + Security",
+      "description": "Review release guardrails and credential boundaries.",
+      "screen": "security"
+    }
+  ]
+};
+window.CLIENT_HUB_RULES = {
+  "version": "1.2.2",
+  "rules": {
+    "open_hq": {
+      "label": "Open Opportunity HQ",
+      "description": "Open the full Notion Opportunity HQ Lite workspace.",
+      "link_key": "opportunity_hq_lite"
+    },
+    "dashboard": {
+      "label": "Opportunity Dashboard",
+      "description": "Open the full Opportunity Dashboard in Notion.",
+      "link_key": "opportunity_dashboard"
+    },
+    "insights": {
+      "label": "Insights",
+      "description": "Open the full Insights view in Notion.",
+      "link_key": "insights"
+    },
+    "provider": {
+      "label": "Provider & Funding Insights",
+      "description": "Open provider/funding insights in Notion.",
+      "link_key": "provider_funding_insights"
+    },
+    "targeting": {
+      "label": "Targeting & Scanner Status",
+      "description": "Open targeting/scanner status in Notion.",
+      "link_key": "targeting_scanner_status"
+    },
+    "board": {
+      "label": "Opportunity Board",
+      "description": "Open the full opportunity board database.",
+      "link_key": "opportunity_board"
+    },
+    "client_folder": {
+      "label": "Client Drive Folder",
+      "description": "Open the Regene / CGF Drive folder.",
+      "link_key": "client_drive_folder"
+    },
+    "assets": {
+      "label": "Brand Assets",
+      "description": "Open Drive asset folder.",
+      "link_key": "assets_folder"
+    },
+    "concepts": {
+      "label": "Concepts",
+      "description": "Open Drive concepts folder.",
+      "link_key": "concepts_folder"
+    },
+    "site": {
+      "label": "Google Sites Build",
+      "description": "Open the editable Google Sites asset.",
+      "link_key": "site_edit"
+    },
+    "brand_pdf": {
+      "label": "Brand Breakdown",
+      "description": "Open the brand breakdown PDF.",
+      "link_key": "brand_breakdown_pdf"
+    },
+    "blueprint": {
+      "label": "SM Pro Blueprint Preview",
+      "description": "Open the SM Pro Blueprint preview PDF.",
+      "link_key": "sm_pro_blueprint_pdf"
+    }
+  }
+};
+window.CLIENT_HUB_CONFIG = {
+  "HELP_DESK_BOOKING_URL": "https://calendly.com/haydenloudenback/haydenworks-help-desk-gbrands",
+  "client_website_url": "https://www.comegetfunded.com",
+  "concierge": {
+    "source_identifier": "client-hub",
+    "source_identifier_status": "PROPOSED, pending Hub decision (proposed in the OpportunityHQ Next alignment reply 2026-11-18: values \"client-hub\" and \"opphq-next\", to be fixed as a Hub decision before either side implements)"
+  },
+  "config_version": "phase1-2026-11-18",
+  "external_links": {
+    "rel": "noopener noreferrer",
+    "status": "UNAPPROVED DEFAULT, carried from v1.2.2 behavior; Hayden marked the external-link preference unsure on 2026-11-18",
+    "target": "_blank"
+  },
+  "helpdesk_positioning": "Your complimentary on-call help desk provided by HaydenWorks.",
+  "hosting": {
+    "stack": "Shared with OpportunityHQ Next: GitHub, Supabase, Supabase Edge Functions",
+    "status": "Direction approved by Hayden 2026-11-18 (DEC-0102, DEC-0104). No deployment is claimed. No production hostname or access emails are configured in this file because none have been provided."
+  },
+  "live_billing_controls_enabled": false,
+  "tenant": {
+    "brand": "Come Get Funded",
+    "client_name": "Regene Du Preez",
+    "role": "First Client Hub pilot client, confirmed by Hayden 2026-11-18"
+  },
+  "auth": {
+    "status": "DEPLOYING (approved by Hayden 2026-11-20): the client-hub Edge Function deploy and Regene provisioning proceed per deploy/DEPLOY-RUNBOOK-CLIENT-HUB.md. Until the function is live and the pilot identity is provisioned, session checks end in truthful backend-unreachable or signed-out states, never a fake success.",
+    "supabase_url": "https://fafowzslfscgtahqokpu.supabase.co",
+    "supabase_url_kind": "public project URL, not a secret",
+    "client_hub_api_base": "https://fafowzslfscgtahqokpu.supabase.co/functions/v1/client-hub",
+    "client_hub_api_base_kind": "public URL of the future client-hub function; not deployed yet",
+    "supabase_publishable_key": "sb_publishable_PNEFTDNzwf0b5Waecour_w_GMhFV12t",
+    "supabase_publishable_key_kind": "public client key, returned by the live ohq /api/config on 2026-11-19; public by design, not a secret",
+    "tenant_slug": "cgf",
+    "token_handling": "Session tokens are held in page memory only, never in browser storage, never in Notion or Drive records, and never logged. This build collects no credentials and has no sign-in form.",
+    "shell_origin": "https://client.haydenworks.us",
+    "shell_origin_status": "Set at package generation time. Must match the client-hub function secret CORS_ALLOWED_ORIGINS exactly, or the browser will block API calls from this shell.",
+    "planned_shell_origin": "https://client.haydenworks.us",
+    "planned_shell_origin_status": "Working name requested by Hayden 2026-11-20 (subdomain of haydenworks.us). Not live until the DNS and host steps in the deploy runbook complete."
+  }
+};
+</script>
+  <script src="./assets/app.js"></script>
+</body>
+</html>
