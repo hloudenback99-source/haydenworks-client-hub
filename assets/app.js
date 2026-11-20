@@ -42,6 +42,14 @@ function activeSceneId(){
   const active = document.querySelector('.scene.active');
   return active ? active.id : 'scene-menu';
 }
+/* Phase 7 (Scope J): focus management for scene changes. Scenes are
+   shown and hidden with display:none, so a control that triggers a
+   scene change ends up inside hidden markup and keyboard focus would
+   be lost to the document body. After a scene change, focus moves to
+   the heading of the scene that opened (both headings carry
+   tabindex="-1" from the build). Guarded: hosts without a focus
+   method (test stubs) simply skip the move. */
+function focusEl(el){ if(el && typeof el.focus === 'function'){ el.focus(); } }
 function setStatus(message){
   const box = $('actionStatus');
   if(!box) return;
@@ -90,6 +98,7 @@ function renderBase(){
   $('stepName').textContent = DATA.current_state.status_label;
   $('progressText').textContent = `${DATA.current_state.overall_progress}%`;
   $('progressBar').style.width = `${DATA.current_state.overall_progress}%`;
+  $('progressBar').setAttribute('aria-valuenow', String(DATA.current_state.overall_progress));
   $('phaseRail').innerHTML = phases.map(p => `<div class="phase-chip ${p === DATA.current_state.phase ? 'current' : phases.indexOf(p) < phases.indexOf(DATA.current_state.phase) ? 'done' : ''}">${esc(p)}</div>`).join('');
   $('navPanel').innerHTML = DATA.navigation.map(n => `<button type="button" class="nav-card" data-screen="${esc(n.screen)}"><strong>${esc(n.label)} <span aria-hidden="true">→</span></strong><span>${esc(n.description)}</span></button>`).join('');
   document.querySelectorAll('[data-screen]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => renderFocus(btn.dataset.screen, activeSceneId())); });
@@ -97,7 +106,9 @@ function renderBase(){
 function bindDynamicActions(){
   document.querySelectorAll('[data-action-message]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => actionMessage(btn.dataset.actionMessage || 'This action', btn.dataset.configNeeded || '')); });
   document.querySelectorAll('[data-track-link]').forEach(link => { if(link.dataset.hubBound) return; link.dataset.hubBound = '1'; link.addEventListener('click', () => setStatus(`Opening ${link.dataset.trackLink}.`)); });
-  document.querySelectorAll('[data-return-menu]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => { setStatus('Returning to the Client Hub menu.'); showScene('scene-menu'); }); });
+  document.querySelectorAll('[data-return-menu]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => { setStatus('Returning to the Client Hub menu.'); showScene('scene-menu'); focusEl($('packageTitle')); }); });
+  document.querySelectorAll('[data-concierge-send]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => { const field = $('conciergeMessage'); submitConciergeInquiry(null, field ? field.value : ''); }); });
+  document.querySelectorAll('[data-helpdesk-load]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => { loadHelpDesk(null); }); });
   document.querySelectorAll('[data-gallery-img]').forEach(img => { if(img.dataset.hubBound) return; img.dataset.hubBound = '1'; img.addEventListener('error', () => { const note = document.createElement('div'); note.className = 'img-fallback'; note.textContent = 'Preview unavailable. The source image could not be loaded.'; img.replaceWith(note); setStatus('A preview image could not be loaded. The source may need checking.'); }); });
 }
 function setFocus(title, kicker, subtitle, body){
@@ -107,6 +118,7 @@ function setFocus(title, kicker, subtitle, body){
   $('focusBody').innerHTML = body;
   bindDynamicActions();
   showScene('scene-focus');
+  focusEl($('focusTitle'));
 }
 function renderFocus(screen, origin){
   focusOrigin = origin && origin !== 'scene-focus' ? origin : 'scene-menu';
@@ -154,12 +166,22 @@ function renderFocus(screen, origin){
   if(screen === 'helpdesk'){
     const sourceId = (CONFIG.concierge && CONFIG.concierge.source_identifier) || '';
     const sourceStatus = (CONFIG.concierge && CONFIG.concierge.source_identifier_status) || '';
-    const conciergeCard = sourceId ? `<article class="card"><h2>Concierge</h2><p>Concierge inquiries from this Hub carry the source identifier <strong>${esc(sourceId)}</strong>. Status: ${esc(sourceStatus)}. The concierge chat backend is not connected in this build yet, so no message can be sent from this screen today and no chat success is shown. Booking a Help Desk session is the working route.</p><div class="screen-actions"><button class="btn ghost" type="button" disabled>Start concierge chat</button></div><p class="quiet">Concierge chat stays disabled until the shared concierge service is connected (Plan Phase 4).</p></article>` : `<article class="card"><h2>Concierge</h2><button class="link-card missing" type="button" data-action-message="Concierge" data-config-needed="Concierge source identifier"><div><strong>Concierge</strong><span>Configuration needed</span></div><b>Needs config</b></button></article>`;
+    let conciergeCard;
+    if(!sourceId){
+      conciergeCard = `<article class="card"><h2>Concierge</h2><button class="link-card missing" type="button" data-action-message="Concierge" data-config-needed="Concierge source identifier"><div><strong>Concierge</strong><span>Configuration needed</span></div><b>Needs config</b></button></article>`;
+    } else if(!conciergeContractPresent()){
+      conciergeCard = `<article class="card"><h2>Concierge</h2><p>Concierge inquiries from this Hub carry the source identifier <strong>${esc(sourceId)}</strong>. Status: ${esc(sourceStatus)}. The concierge backend is not configured in this build yet, so no message can be sent from this screen today and no chat success is shown. Booking a Help Desk session is the working route.</p><div class="screen-actions"><button class="btn ghost" type="button" disabled>Send concierge message</button></div><p class="quiet">Concierge messaging stays disabled until the shared concierge backend contract is configured for this build.</p></article>`;
+    } else {
+      conciergeStateName = conciergeInitialState();
+      conciergeCard = `<article class="card"><h2>Concierge</h2><p>Send a message to the shared HaydenWorks concierge. Inquiries from this Hub carry the source identifier <strong>${esc(sourceId)}</strong>. Status: ${esc(sourceStatus)}. When your message is recorded, a receipt for it shows here. For anything urgent, booking a Help Desk session is still the fastest route to a person.</p><div class="concierge-form"><label class="quiet" for="conciergeMessage">Your message</label><textarea id="conciergeMessage" rows="4" placeholder="What do you need?"></textarea><div class="screen-actions"><button class="btn primary" type="button" id="conciergeSendBtn" data-concierge-send="1">Send concierge message</button></div><p class="concierge-status" id="conciergeStatus" data-concierge-state="${conciergeStateName}">${esc(CONCIERGE_STATE_MESSAGES[conciergeStateName])}</p></div></article>`;
+    }
+    const hdCards = helpdeskCardsHtml();
     return setFocus('Help Desk', 'Support routing', 'Book through the confirmed HaydenWorks Help Desk scheduling link. Live credit charges stay disabled in this build.', `
       <div class="screen-grid">
         <article class="card"><h2>Support scope</h2>${checks(['Walkthroughs','Bugs and glitches','Recovery help','Login/access routing','Post-launch review support'])}</article>
         <article class="card"><h2>Book a session</h2><p>${esc(CONFIG.helpdesk_positioning || 'Your complimentary on-call help desk provided by HaydenWorks.')}</p><div class="link-list">${linkCard('Book Help Desk','HaydenWorks Help Desk scheduling',CONFIG.HELP_DESK_BOOKING_URL)}</div></article>
       </div>
+      <div class="screen-grid" style="margin-top:16px">${hdCards}</div>
       <div style="margin-top:16px">${conciergeCard}</div>`);
   }
   if(screen === 'handoff'){
@@ -302,6 +324,266 @@ function createAuthPanel(){
   return panel;
 }
 
+/* Phase 4 (Scope F): concierge client.
+   Submits inquiries to the shared concierge contract implemented in
+   repo/server/client-hub/ (POST /api/concierge/inquiries on
+   CONFIG.auth.client_hub_api_base), carrying the configured source
+   identifier from CONFIG.concierge. Rules it cannot break:
+   - The form renders only when the backend contract is present in
+     configuration (API base plus source identifier). Without the
+     contract the card renders its disabled or configuration-needed
+     states instead, exactly as Phase 2 required.
+   - A sent state is rendered ONLY from a real backend response
+     carrying a receipt (201, or 200 with duplicate: true). No click,
+     timer, or local flag can produce it.
+   - No session token, no request: a send attempt without the Phase 3
+     in-memory token ends in the unauthorized state. The token is
+     never stored, logged, or rendered by this client either.
+   - One idempotency key per composed message: the key is created
+     when a message is first submitted, reused across retries of
+     that same message, and replaced after a successful send or when
+     the message text changes, so a retry cannot double-post and an
+     edit is never mistaken for a replay. */
+let conciergeStateName = 'ready';
+let conciergeReceipt = null;
+let conciergePending = false;
+let conciergeDraftKey = null;
+let conciergeDraftText = null;
+let conciergeKeyCounter = 0;
+const CONCIERGE_STATE_MESSAGES = {
+  'missing-config': 'Concierge messaging is not configured in this build yet.',
+  'unauthorized': 'Secure access is not active, so the concierge cannot take your message yet. When live access is connected and you are signed in, this form sends.',
+  'ready': 'Your message goes to the shared concierge with the source identifier for this Hub.',
+  'pending': 'Sending your message to the concierge.',
+  'sent': 'Message recorded.',
+  'failure': 'Your message could not be recorded. You can try sending it again.'
+};
+function conciergeConfig(){ return CONFIG.concierge || null; }
+function conciergeContractPresent(){
+  const cfg = authConfig();
+  const concierge = conciergeConfig();
+  return Boolean(cfg && cfg.client_hub_api_base && concierge && concierge.source_identifier);
+}
+function conciergeInitialState(){
+  if(!conciergeContractPresent()) return 'missing-config';
+  if(!hubSessionToken) return 'unauthorized';
+  return 'ready';
+}
+function getConciergeState(){ return conciergeStateName; }
+function getConciergeReceipt(){ return conciergeReceipt; }
+function renderConciergeStatus(){
+  const el = $('conciergeStatus');
+  if(el){
+    el.dataset.conciergeState = conciergeStateName;
+    let message = CONCIERGE_STATE_MESSAGES[conciergeStateName] || CONCIERGE_STATE_MESSAGES.ready;
+    if(conciergeStateName === 'sent' && conciergeReceipt){
+      message = conciergeReceipt.duplicate
+        ? `That message was already recorded. Receipt ${conciergeReceipt.id}.`
+        : `Message recorded. Receipt ${conciergeReceipt.id}.`;
+    }
+    el.textContent = message;
+  }
+  const btn = $('conciergeSendBtn');
+  if(btn){ btn.disabled = conciergePending; }
+}
+function setConciergeState(name, receipt){
+  conciergeStateName = name;
+  if(receipt !== undefined) conciergeReceipt = receipt;
+  renderConciergeStatus();
+}
+function newConciergeKey(){
+  const c = (typeof window !== 'undefined' && window.crypto) || (typeof crypto !== 'undefined' ? crypto : null);
+  if(c && typeof c.randomUUID === 'function') return c.randomUUID();
+  conciergeKeyCounter += 1;
+  return `hub-concierge-${Date.now()}-${conciergeKeyCounter}`;
+}
+async function submitConciergeInquiry(fetchFn, message){
+  if(!conciergeContractPresent()){ setConciergeState('missing-config'); return conciergeStateName; }
+  const text = String(message == null ? '' : message).trim();
+  if(!text){ setConciergeState(hubSessionToken ? 'ready' : 'unauthorized'); setStatus('Write a message first, then send it to the concierge.'); return conciergeStateName; }
+  if(!hubSessionToken){ setConciergeState('unauthorized'); return conciergeStateName; }
+  if(conciergePending) return conciergeStateName;
+  const doFetch = fetchFn || (typeof window !== 'undefined' ? window.fetch : null);
+  if(!doFetch){ setConciergeState('failure'); return conciergeStateName; }
+  if(conciergeDraftKey === null || conciergeDraftText !== text){ conciergeDraftKey = newConciergeKey(); conciergeDraftText = text; }
+  conciergePending = true;
+  setConciergeState('pending');
+  try{
+    const cfg = authConfig();
+    const concierge = conciergeConfig();
+    const res = await doFetch(`${cfg.client_hub_api_base}/api/concierge/inquiries`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${hubSessionToken}`, 'Content-Type': 'application/json', 'Idempotency-Key': conciergeDraftKey },
+      body: JSON.stringify({ tenant: cfg.tenant_slug || '', source: concierge.source_identifier, message: text, escalation: { requested: false, emergency: false } })
+    });
+    let body = {};
+    try{ body = await res.json(); }catch(e){ body = {}; }
+    if(res.status === 201 || res.status === 200){
+      conciergeDraftKey = null;
+      conciergeDraftText = null;
+      setConciergeState('sent', body.receipt || null);
+    } else if(res.status === 401 || res.status === 403){
+      setConciergeState('unauthorized');
+    } else {
+      setConciergeState('failure');
+    }
+  }catch(e){
+    setConciergeState('failure');
+  }
+  conciergePending = false;
+  renderConciergeStatus();
+  return conciergeStateName;
+}
+
+/* Phase 5 (Scope G): Help Desk credit surfaces.
+   Loads the derived balance and history from the Help Desk contract
+   implemented in repo/server/client-hub/ (GET /api/helpdesk/balance
+   and /api/helpdesk/history on CONFIG.auth.client_hub_api_base) and
+   renders them on the Help Desk screen. Rules it cannot break:
+   - Shadow truthfulness: the cards always carry the Shadow banner,
+     the balance is whatever the backend derived from the credit
+     ledger (never typed in, never computed locally), and the Buy
+     credits control is rendered disabled in every state of this
+     build because live charges are disabled.
+   - A loaded state is rendered ONLY from real 200 responses. No
+     token, no request: a load attempt without the Phase 3 in-memory
+     token ends in the unauthorized state.
+   - Premium renders as its own block with its label, the remaining
+     credits in the current monthly allowance, and the reset rule,
+     separate from purchased, subscription, and granted balances. */
+let helpdeskStateName = 'unauthorized';
+let helpdeskBalanceData = null;
+let helpdeskHistoryData = null;
+let helpdeskPending = false;
+const HELPDESK_STATE_MESSAGES = {
+  'missing-config': 'Credit balances are not configured in this build yet.',
+  'unauthorized': 'Secure access is not active, so your credit record cannot load yet. When live access is connected and you are signed in, your balance and history show here.',
+  'ready': 'Your Shadow credit record can load now.',
+  'pending': 'Loading your Shadow credit record.',
+  'loaded': 'Shadow credit record loaded. Balances are derived from the credit ledger, never typed in.',
+  'failure': 'Your credit record could not be loaded. The Help Desk service may not be connected in this build yet.',
+  'payment-pending': 'Payment confirmation is pending. Credits are added only after the payment is confirmed, never by this page returning from checkout. Use Check credit balance to see the confirmed record.'
+};
+/* Phase 6 (Scope H): the checkout return path, deliberately
+   powerless. A browser return from checkout is never authority to
+   issue credits: it records nothing, grants nothing, and does not
+   refresh optimistically. It only selects the payment-pending
+   state above when the address carries the checkout=return
+   marker, so a returning buyer sees a truthful pending message
+   while the confirmed record catches up through the webhook. The
+   Buy credits control stays disabled in every state (item I). */
+function checkoutReturnState(search){
+  if(typeof search !== 'string' || !search) return null;
+  const q = search.charAt(0) === '?' ? search.slice(1) : search;
+  if(!q) return null;
+  const pairs = q.split('&');
+  for(const pair of pairs){
+    const eq = pair.indexOf('=');
+    const k = eq < 0 ? pair : pair.slice(0, eq);
+    const v = eq < 0 ? '' : pair.slice(eq + 1);
+    if(k === 'checkout' && v === 'return') return 'payment-pending';
+  }
+  return null;
+}
+function currentCheckoutSearch(){
+  try{ return (typeof window !== 'undefined' && window.location && window.location.search) || ''; }catch(e){ return ''; }
+}
+function applyCheckoutReturn(search){
+  const stateName = checkoutReturnState(typeof search === 'string' ? search : currentCheckoutSearch());
+  if(stateName) setHelpDeskState(stateName);
+  return stateName;
+}
+function helpdeskContractPresent(){
+  const cfg = authConfig();
+  return Boolean(cfg && cfg.client_hub_api_base && CONFIG.helpdesk);
+}
+function helpdeskInitialState(){
+  if(!helpdeskContractPresent()) return 'missing-config';
+  if(!hubSessionToken) return 'unauthorized';
+  return 'ready';
+}
+function getHelpDeskState(){ return helpdeskStateName; }
+function getHelpDeskBalance(){ return helpdeskBalanceData; }
+function getHelpDeskHistory(){ return helpdeskHistoryData; }
+function serviceMonthLabel(ym){
+  const names = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const m = /^(\d{4})-(\d{2})$/.exec(String(ym || ''));
+  if(!m) return 'this service month';
+  return `${names[Number(m[2]) - 1] || ''} ${m[1]}`.trim();
+}
+function renderHelpDeskBuckets(balance){
+  if(!balance || !balance.buckets) return '<p class="quiet">No balance loaded yet. Use Check credit balance after secure access is active.</p>';
+  const b = balance.buckets;
+  const prem = b.premium || {};
+  let html = `<div class="hd-bucket premium"><div class="hd-bucket-head"><strong>${esc(prem.label || 'Help Desk Premium')}</strong><span class="badge gold">Separate allowance</span></div><p>${prem.available != null ? prem.available : 0} of ${prem.monthlyAllowance != null ? prem.monthlyAllowance : 4} call credits remain for ${esc(serviceMonthLabel(prem.serviceMonth))}.</p><p class="quiet">This allowance resets each service month and never rolls over. It is kept separate from every other credit balance.</p></div>`;
+  const row = (label, bucket) => {
+    const avail = bucket && bucket.available != null ? bucket.available : 0;
+    const held = bucket && bucket.held ? `, ${bucket.held} on hold` : '';
+    return `<div class="hd-bucket"><strong>${label}</strong><span>${avail} available${held}</span></div>`;
+  };
+  html += row('Purchased credits', b.purchased) + row('Subscription credits', b.subscription) + row('Granted credits', b.grant);
+  html += `<p class="quiet">Total available: ${balance.totalAvailable != null ? balance.totalAvailable : 0} credits${balance.totalHeld ? `, ${balance.totalHeld} on hold` : ''}.</p>`;
+  if(balance.overdraftOutstanding > 0) html += `<p class="quiet">An emergency overdraft of ${balance.overdraftOutstanding} credit${balance.overdraftOutstanding === 1 ? '' : 's'} is outstanding. New credits repay it first.</p>`;
+  return html;
+}
+function renderHelpDeskHistory(entries){
+  if(!Array.isArray(entries)) return '<p class="quiet">No history loaded yet.</p>';
+  if(!entries.length) return '<p class="quiet">No credit activity yet in this Shadow record.</p>';
+  return entries.map(e => `<div class="hd-entry"><b>${esc(e.explanation || e.kind || 'Entry')}</b><span>${esc(String(e.effectiveAt || '').slice(0, 10))} · Shadow record</span></div>`).join('');
+}
+function helpdeskCardsHtml(){
+  helpdeskStateName = checkoutReturnState(currentCheckoutSearch()) || helpdeskInitialState();
+  return `<article class="card"><h2>Help Desk credits</h2><div class="hd-shadow"><strong>Shadow mode.</strong> This credit record proves the Help Desk lifecycle for reconciliation. No live charges are possible in this build, and no payment is ever taken on this screen.</div><p class="concierge-status" id="helpdeskStatus" data-helpdesk-state="${helpdeskStateName}">${esc(HELPDESK_STATE_MESSAGES[helpdeskStateName])}</p><div id="helpdeskBuckets">${renderHelpDeskBuckets(null)}</div><div class="screen-actions"><button class="btn ghost" type="button" data-helpdesk-load="1">Check credit balance</button><button class="btn primary" type="button" disabled>Buy credits</button></div><p class="quiet">Purchases stay disabled until live billing is approved. In this build, bookings and balances are Shadow records kept for reconciliation.</p></article><article class="card"><h2>Credit history</h2><div id="helpdeskHistoryList">${renderHelpDeskHistory(null)}</div></article>`;
+}
+function renderHelpDeskStatus(){
+  const el = $('helpdeskStatus');
+  if(el){
+    el.dataset.helpdeskState = helpdeskStateName;
+    el.textContent = HELPDESK_STATE_MESSAGES[helpdeskStateName] || HELPDESK_STATE_MESSAGES.ready;
+  }
+  const buckets = $('helpdeskBuckets');
+  if(buckets && helpdeskBalanceData) buckets.innerHTML = renderHelpDeskBuckets(helpdeskBalanceData);
+  const list = $('helpdeskHistoryList');
+  if(list && helpdeskHistoryData) list.innerHTML = renderHelpDeskHistory(helpdeskHistoryData);
+}
+function setHelpDeskState(name){
+  helpdeskStateName = name;
+  renderHelpDeskStatus();
+}
+async function loadHelpDesk(fetchFn){
+  if(!helpdeskContractPresent()){ setHelpDeskState('missing-config'); return helpdeskStateName; }
+  if(!hubSessionToken){ setHelpDeskState('unauthorized'); return helpdeskStateName; }
+  if(helpdeskPending) return helpdeskStateName;
+  const doFetch = fetchFn || (typeof window !== 'undefined' ? window.fetch : null);
+  if(!doFetch){ setHelpDeskState('failure'); return helpdeskStateName; }
+  helpdeskPending = true;
+  setHelpDeskState('pending');
+  let outcome = 'failure';
+  try{
+    const cfg = authConfig();
+    const slug = encodeURIComponent(cfg.tenant_slug || '');
+    const headers = { Authorization: `Bearer ${hubSessionToken}` };
+    const balRes = await doFetch(`${cfg.client_hub_api_base}/api/helpdesk/balance?tenant=${slug}`, { headers });
+    if(balRes.status === 401 || balRes.status === 403){
+      outcome = 'unauthorized';
+    } else if(balRes.status === 200){
+      const balBody = await balRes.json();
+      const histRes = await doFetch(`${cfg.client_hub_api_base}/api/helpdesk/history?tenant=${slug}`, { headers });
+      if(histRes.status === 200){
+        const histBody = await histRes.json();
+        helpdeskBalanceData = balBody.balance || null;
+        helpdeskHistoryData = Array.isArray(histBody.entries) ? histBody.entries : [];
+        outcome = 'loaded';
+      }
+    }
+  }catch(e){
+    outcome = 'failure';
+  }
+  helpdeskPending = false;
+  setHelpDeskState(outcome);
+  return helpdeskStateName;
+}
+
 function setupHelloPhysics(){
   const scene = $('scene-hello');
   const obj = $('helloObject');
@@ -366,9 +648,9 @@ function boot(){
   renderBase();
   setupHelloPhysics();
   let enterPending = false;
-  $('enterBtn').addEventListener('click', () => { if(enterPending) return; enterPending = true; setStatus('Opening Client Hub menu.'); showScene('scene-welcome'); setTimeout(()=>{ showScene('scene-menu'); enterPending = false; }, reduceMotion ? 0 : 750); });
-  $('skipIntro').addEventListener('click', () => { setStatus('Intro skipped.'); showScene('scene-menu'); });
-  $('backToMenu').addEventListener('click', () => { setStatus('Returning to previous Client Hub screen.'); showScene(focusOrigin || 'scene-menu'); });
+  $('enterBtn').addEventListener('click', () => { if(enterPending) return; enterPending = true; setStatus('Opening Client Hub menu.'); showScene('scene-welcome'); setTimeout(()=>{ showScene('scene-menu'); focusEl($('packageTitle')); enterPending = false; }, reduceMotion ? 0 : 750); });
+  $('skipIntro').addEventListener('click', () => { setStatus('Intro skipped.'); showScene('scene-menu'); focusEl($('packageTitle')); });
+  $('backToMenu').addEventListener('click', () => { setStatus('Returning to previous Client Hub screen.'); showScene(focusOrigin || 'scene-menu'); focusEl($('packageTitle')); });
   $('securityBtn').addEventListener('click', () => renderFocus('security', activeSceneId()));
   const conciergeBtn = document.createElement('button');
   conciergeBtn.id = 'conciergeBtn';
