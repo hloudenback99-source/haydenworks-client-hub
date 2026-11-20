@@ -34,9 +34,9 @@
     <section id="scene-menu" class="scene scrollable">
       <div class="menu-layout">
         <div class="menu-card">
-          <div class="package-row"><div><p class="kicker"><span id="clientName"></span> · <span id="ownerName"></span></p><h1 id="packageTitle" class="title"></h1><p id="clientMessage" class="subtitle"></p></div><span class="status-pill">Live links connected</span></div>
+          <div class="package-row"><div><p class="kicker"><span id="clientName"></span> · <span id="ownerName"></span></p><h1 id="packageTitle" class="title" tabindex="-1"></h1><p id="clientMessage" class="subtitle"></p></div><span class="status-pill">Live links connected</span></div>
           <div class="phase-line"><div><div id="phaseName" class="phase"></div><div class="quiet">Current phase</div></div><div><strong id="progressText"></strong><br><span id="stepName" class="quiet"></span></div></div>
-          <div class="progress"><div id="progressBar" class="bar"></div></div><div id="phaseRail" class="phase-rail"></div>
+          <div class="progress"><div id="progressBar" class="bar" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div><div id="phaseRail" class="phase-rail"></div>
           <div class="screen-actions"><button type="button" class="btn primary" data-screen="opportunity_hq">Start with Opportunity HQ</button><button type="button" class="btn ghost" data-screen="handoff">Final Hand-Off</button></div>
         </div>
         <div id="navPanel" class="nav-panel" aria-label="Client Hub screens"></div>
@@ -45,11 +45,11 @@
     </section>
     <section id="scene-focus" class="scene scrollable">
       <div class="focus-inner"><div class="focus-shell">
-        <header class="focus-head"><div class="focus-title"><p id="focusKicker" class="kicker"></p><h1 id="focusTitle"></h1><p id="focusSubtitle" class="subtitle"></p></div><button id="backToMenu" type="button" class="btn ghost">← Back to Hub</button></header>
+        <header class="focus-head"><div class="focus-title"><p id="focusKicker" class="kicker"></p><h1 id="focusTitle" tabindex="-1"></h1><p id="focusSubtitle" class="subtitle"></p></div><button id="backToMenu" type="button" class="btn ghost">← Back to Hub</button></header>
         <div id="focusBody" class="focus-body"></div>
       </div></div>
     </section>
-    <div id="actionStatus" class="action-status" role="status" aria-live="polite"></div>
+    <div id="actionStatus" class="action-status" role="status" aria-live="polite" aria-atomic="true"></div>
   </main>
   <script>
 window.CLIENT_HUB_STATE = {
@@ -430,6 +430,18 @@ window.CLIENT_HUB_CONFIG = {
     "target": "_blank"
   },
   "helpdesk_positioning": "Your complimentary on-call help desk provided by HaydenWorks.",
+  "helpdesk": {
+    "mode": "shadow",
+    "live_charges_enabled": false,
+    "premium_label": "Help Desk Premium",
+    "premium_monthly_calls": 4,
+    "status": "Shadow only in this build. Balances and history are prospective records kept for reconciliation. Live charges are disabled and the purchase control is inactive.",
+    "billing": {
+      "mode": "sandbox",
+      "live_charges_enabled": false,
+      "status": "PROPOSED, not configured: this build holds no payment sandbox keys, so the purchase control stays disabled and no payment can be taken. Credits are issued only after a confirmed payment event, never by a browser returning from checkout."
+    }
+  },
   "hosting": {
     "stack": "Shared with OpportunityHQ Next: GitHub, Supabase, Supabase Edge Functions",
     "status": "Direction approved by Hayden 2026-11-18 (DEC-0102, DEC-0104). No deployment is claimed. No production hostname or access emails are configured in this file because none have been provided."
@@ -441,7 +453,7 @@ window.CLIENT_HUB_CONFIG = {
     "role": "First Client Hub pilot client, confirmed by Hayden 2026-11-18"
   },
   "auth": {
-    "status": "DEPLOYING (approved by Hayden 2026-11-20): the client-hub Edge Function deploy and Regene provisioning proceed per deploy/DEPLOY-RUNBOOK-CLIENT-HUB.md. Until the function is live and the pilot identity is provisioned, session checks end in truthful backend-unreachable or signed-out states, never a fake success.",
+    "status": "LIVE (deployed 2026-11-20): the client-hub Edge Function is live on the shared OpportunityHQ Next project (Phase 3 identity plus the Phases 4-6 writes, concierge, Help Desk, and billing-route release) and the pilot identity is provisioned. Billing stays disabled (liveChargesEnabled false) until a separate go-live.",
     "supabase_url": "https://fafowzslfscgtahqokpu.supabase.co",
     "supabase_url_kind": "public project URL, not a secret",
     "client_hub_api_base": "https://fafowzslfscgtahqokpu.supabase.co/functions/v1/client-hub",
