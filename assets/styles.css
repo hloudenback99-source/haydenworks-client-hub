@@ -57,3 +57,22 @@ button,a{font:inherit}:focus-visible{outline:2px solid var(--cyan);outline-offse
 @media(max-width:560px){.concierge-btn{right:12px;bottom:calc(66px + var(--safe-bottom));padding:11px 15px}}
 @media(max-width:560px){.hd-bucket{flex-wrap:wrap}.hd-entry{flex-wrap:wrap}.hd-entry span{white-space:normal}}
 
+/* Follow-up release (2026-11-20): Concierge pop-up chat box, Help Desk purchase rows, concierge sessions record. The popup is an overlay dialog above every scene; the Concierge button keeps its own layer below it. */
+.concierge-popup{position:fixed;inset:0;z-index:80;display:flex;align-items:flex-end;justify-content:flex-end;padding:18px;background:rgba(2,6,12,.55)}
+.concierge-popup-card{background:linear-gradient(180deg,var(--panel),rgba(6,10,17,.92));border:1px solid var(--line);border-radius:18px;width:min(420px,100%);max-height:82vh;overflow-y:auto;padding:18px;box-shadow:var(--shadow)}
+.concierge-popup-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px}
+.concierge-popup-head h2{margin:0;font-size:22px;letter-spacing:-.03em}
+.concierge-popup-actions{display:flex;gap:8px;flex-wrap:wrap}
+.concierge-popup-body .concierge-form textarea{width:100%}
+.hd-purchase{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
+.hd-purchase-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.hd-meta{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.hd-session-row{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;background:rgba(255,255,255,.045);border:1px solid var(--line);border-radius:12px;color:var(--text);padding:10px 12px;margin-top:8px;cursor:pointer;text-align:left;font:inherit}
+.hd-session-row:hover{border-color:rgba(54,204,255,.42)}
+.hd-session-detail{margin-top:12px}
+.hd-transcript-line{border-top:1px solid var(--line);padding:8px 0}
+.hd-transcript-line span{color:var(--muted);font-size:12px}
+.hd-transcript-line p{margin:4px 0 0}
+.hd-resolution{border:1px solid rgba(231,199,109,.4);border-radius:12px;padding:10px 12px;margin-top:10px}
+.hd-resolution h4{margin:0 0 6px}
+@media(max-width:560px){.concierge-popup{padding:10px}.concierge-popup-card{max-height:88vh}}

@@ -22,6 +22,7 @@ let statusTimer = null;
 
 function showScene(id){
   const target = $(id) ? id : 'scene-menu';
+  if(target !== 'scene-menu' && target !== 'scene-focus' && conciergePopupOpen){ closeConciergePopup({ restoreFocus: false }); }
   document.querySelectorAll('.scene').forEach(s => s.classList.toggle('active', s.id === target));
   const scene = $(target);
   if(scene){ scene.scrollTop = 0; }
@@ -34,9 +35,7 @@ function updateConciergeVisibility(sceneId){
   btn.classList.toggle('hidden', !show);
 }
 function openConcierge(){
-  if(activeSceneId() === 'scene-focus' && $('focusTitle') && $('focusTitle').textContent === 'Help Desk'){ setStatus('Help Desk is already open.'); return; }
-  setStatus('Opening Help Desk from Concierge.');
-  renderFocus('helpdesk', activeSceneId());
+  return openConciergePopup();
 }
 function activeSceneId(){
   const active = document.querySelector('.scene.active');
@@ -109,6 +108,8 @@ function bindDynamicActions(){
   document.querySelectorAll('[data-return-menu]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => { setStatus('Returning to the Client Hub menu.'); showScene('scene-menu'); focusEl($('packageTitle')); }); });
   document.querySelectorAll('[data-concierge-send]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => { const field = $('conciergeMessage'); submitConciergeInquiry(null, field ? field.value : ''); }); });
   document.querySelectorAll('[data-helpdesk-load]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => { loadHelpDesk(null); }); });
+  document.querySelectorAll('[data-concierge-sessions-load]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => { loadConciergeSessions(null); }); });
+  document.querySelectorAll('[data-purchase-option]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => { purchaseOptionClick(btn.dataset.purchaseOption || ''); }); });
   document.querySelectorAll('[data-gallery-img]').forEach(img => { if(img.dataset.hubBound) return; img.dataset.hubBound = '1'; img.addEventListener('error', () => { const note = document.createElement('div'); note.className = 'img-fallback'; note.textContent = 'Preview unavailable. The source image could not be loaded.'; img.replaceWith(note); setStatus('A preview image could not be loaded. The source may need checking.'); }); });
 }
 function setFocus(title, kicker, subtitle, body){
@@ -372,19 +373,26 @@ function conciergeInitialState(){
 function getConciergeState(){ return conciergeStateName; }
 function getConciergeReceipt(){ return conciergeReceipt; }
 function renderConciergeStatus(){
+  let message = CONCIERGE_STATE_MESSAGES[conciergeStateName] || CONCIERGE_STATE_MESSAGES.ready;
+  if(conciergeStateName === 'sent' && conciergeReceipt){
+    message = conciergeReceipt.duplicate
+      ? `That message was already recorded. Receipt ${conciergeReceipt.id}.`
+      : `Message recorded. Receipt ${conciergeReceipt.id}.`;
+  }
   const el = $('conciergeStatus');
   if(el){
     el.dataset.conciergeState = conciergeStateName;
-    let message = CONCIERGE_STATE_MESSAGES[conciergeStateName] || CONCIERGE_STATE_MESSAGES.ready;
-    if(conciergeStateName === 'sent' && conciergeReceipt){
-      message = conciergeReceipt.duplicate
-        ? `That message was already recorded. Receipt ${conciergeReceipt.id}.`
-        : `Message recorded. Receipt ${conciergeReceipt.id}.`;
-    }
     el.textContent = message;
   }
   const btn = $('conciergeSendBtn');
   if(btn){ btn.disabled = conciergePending; }
+  const popupStatus = $('conciergePopupStatus');
+  if(popupStatus){
+    popupStatus.dataset.conciergeState = conciergeStateName;
+    popupStatus.textContent = message;
+  }
+  const popupBtn = $('conciergePopupSendBtn');
+  if(popupBtn){ popupBtn.disabled = conciergePending; }
 }
 function setConciergeState(name, receipt){
   conciergeStateName = name;
@@ -397,7 +405,7 @@ function newConciergeKey(){
   conciergeKeyCounter += 1;
   return `hub-concierge-${Date.now()}-${conciergeKeyCounter}`;
 }
-async function submitConciergeInquiry(fetchFn, message){
+async function submitConciergeInquiry(fetchFn, message, options){
   if(!conciergeContractPresent()){ setConciergeState('missing-config'); return conciergeStateName; }
   const text = String(message == null ? '' : message).trim();
   if(!text){ setConciergeState(hubSessionToken ? 'ready' : 'unauthorized'); setStatus('Write a message first, then send it to the concierge.'); return conciergeStateName; }
@@ -411,10 +419,15 @@ async function submitConciergeInquiry(fetchFn, message){
   try{
     const cfg = authConfig();
     const concierge = conciergeConfig();
+    const payload = { tenant: cfg.tenant_slug || '', source: concierge.source_identifier, message: text, escalation: { requested: false, emergency: false } };
+    if(options && options.chatSession){
+      if(!conciergeChatSessionId) conciergeChatSessionId = newChatSessionId();
+      payload.chatSessionId = conciergeChatSessionId;
+    }
     const res = await doFetch(`${cfg.client_hub_api_base}/api/concierge/inquiries`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${hubSessionToken}`, 'Content-Type': 'application/json', 'Idempotency-Key': conciergeDraftKey },
-      body: JSON.stringify({ tenant: cfg.tenant_slug || '', source: concierge.source_identifier, message: text, escalation: { requested: false, emergency: false } })
+      body: JSON.stringify(payload)
     });
     let body = {};
     try{ body = await res.json(); }catch(e){ body = {}; }
@@ -433,6 +446,237 @@ async function submitConciergeInquiry(fetchFn, message){
   conciergePending = false;
   renderConciergeStatus();
   return conciergeStateName;
+}
+
+/* Follow-up release (2026-11-20, plan/FOLLOWUP-DESIGN.md): the
+   Concierge pop-up chat box, the Help Desk purchase surface, and the
+   concierge sessions record.
+   - The Concierge button (bow tie identifier, Hayden's Nov 20
+     directive superseding the DEC-0101 identifier) opens an overlay
+     dialog. The chat inside it sends through the exact Phase 4
+     inquiry contract above; the only addition is the optional
+     chatSessionId that groups one popup conversation into one
+     session in the record.
+   - Focus discipline follows Phase 7: opening moves focus to the
+     popup title, closing returns focus to the Concierge button,
+     Escape closes, and the Visit Help Desk header button closes the
+     popup as it navigates.
+   - The purchase surface is configuration-driven and truthful:
+     while live charges are disabled its buttons are disabled and it
+     says so. No fake checkout, no success state; the only credit
+     path stays the Phase 6 signed-webhook issuance.
+   - The sessions record reads GET /api/concierge/sessions, which is
+     scoped server-side to the caller's own sessions. A loaded state
+     renders only from a real 200 response. */
+let conciergePopupOpen = false;
+let conciergeChatSessionId = null;
+function newChatSessionId(){
+  return `hub-chat-${newConciergeKey().replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60)}`;
+}
+function isConciergePopupOpen(){ return conciergePopupOpen; }
+function getConciergeChatSessionId(){ return conciergeChatSessionId; }
+function conciergePopupBodyHtml(){
+  const stateName = conciergeInitialState();
+  if(stateName === 'missing-config'){
+    return `<p>Concierge messaging is not configured in this build yet, so no message can be sent from this chat today and no chat success is shown. Booking a Help Desk session is the working route.</p>`;
+  }
+  if(stateName === 'unauthorized'){
+    return `<p>Secure access is not active, so the concierge cannot take your message yet. When live access is connected and you are signed in, this chat sends to the shared concierge.</p><p class="concierge-status" id="conciergePopupStatus" data-concierge-state="${conciergeStateName}">${esc(CONCIERGE_STATE_MESSAGES[conciergeStateName] || CONCIERGE_STATE_MESSAGES.unauthorized)}</p>`;
+  }
+  return `<div class="concierge-form"><label class="quiet" for="conciergePopupMessage">Your message</label><textarea id="conciergePopupMessage" rows="4" placeholder="What do you need?"></textarea><div class="screen-actions"><button class="btn primary" type="button" id="conciergePopupSendBtn" data-concierge-popup-send="1">Send concierge message</button></div><p class="concierge-status" id="conciergePopupStatus" data-concierge-state="${conciergeStateName}">${esc(CONCIERGE_STATE_MESSAGES[conciergeStateName] || CONCIERGE_STATE_MESSAGES.ready)}</p></div>`;
+}
+function renderConciergePopupBody(){
+  const body = $('conciergePopupBody');
+  if(!body) return;
+  body.innerHTML = conciergePopupBodyHtml();
+  renderConciergeStatus();
+  bindConciergePopupActions();
+}
+function bindConciergePopupActions(){
+  document.querySelectorAll('[data-concierge-popup-send]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => { const field = $('conciergePopupMessage'); submitConciergeInquiry(null, field ? field.value : '', { chatSession: true }); }); });
+  document.querySelectorAll('[data-concierge-close]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => { closeConciergePopup(); }); });
+  document.querySelectorAll('[data-concierge-helpdesk]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => { visitHelpDeskFromConcierge(); }); });
+}
+function openConciergePopup(){
+  const popup = $('conciergePopup');
+  if(!popup) return { opened: false, reason: 'missing-popup' };
+  renderConciergePopupBody();
+  popup.classList.remove('hidden');
+  conciergePopupOpen = true;
+  focusEl($('conciergePopupTitle'));
+  return { opened: true };
+}
+function closeConciergePopup(options){
+  const popup = $('conciergePopup');
+  if(popup) popup.classList.add('hidden');
+  const wasOpen = conciergePopupOpen;
+  conciergePopupOpen = false;
+  conciergeChatSessionId = null;
+  if(wasOpen && !(options && options.restoreFocus === false)) focusEl($('conciergeBtn'));
+  return { closed: wasOpen };
+}
+function handleConciergePopupKeydown(event){
+  if(event && event.key === 'Escape' && conciergePopupOpen){
+    closeConciergePopup();
+    return true;
+  }
+  return false;
+}
+function visitHelpDeskFromConcierge(){
+  closeConciergePopup({ restoreFocus: false });
+  if(activeSceneId() === 'scene-focus' && $('focusTitle') && $('focusTitle').textContent === 'Help Desk'){
+    setStatus('Help Desk is already open.');
+    return { navigated: false, alreadyOpen: true };
+  }
+  setStatus('Opening Help Desk from Concierge.');
+  renderFocus('helpdesk', activeSceneId());
+  return { navigated: true };
+}
+
+/* Purchase surface (follow-up design section 3). State is a pure
+   function of configuration: shipped configuration is
+   not-available; enabling billing later is configuration (the live
+   flags plus a checkout URL), not a rebuild. */
+function purchaseConfig(root){
+  const cfg = root || CONFIG;
+  return (cfg.helpdesk && cfg.helpdesk.purchase) || {};
+}
+function purchaseControlState(root){
+  const cfg = root || CONFIG;
+  const hd = cfg.helpdesk || {};
+  const purchase = purchaseConfig(cfg);
+  const enabled = cfg.live_billing_controls_enabled === true && hd.live_charges_enabled === true && purchase.live_charges_enabled === true;
+  if(!enabled) return { state: 'not-available', enabled: false, checkoutUrl: null };
+  if(!purchase.checkout_url) return { state: 'missing-config', enabled: false, checkoutUrl: null };
+  return { state: 'ready', enabled: true, checkoutUrl: purchase.checkout_url };
+}
+function formatPrice(cents){
+  if(cents == null || !Number.isFinite(Number(cents))) return '';
+  const dollars = Number(cents) / 100;
+  return Number.isInteger(dollars) ? `$${dollars}` : `$${dollars.toFixed(2)}`;
+}
+function purchaseOptionsHtml(){
+  const purchase = purchaseConfig();
+  const options = Array.isArray(purchase.options) ? purchase.options : [];
+  const st = purchaseControlState();
+  const note = st.state === 'ready'
+    ? 'Checkout opens on the next page. Credits are added only after payment is confirmed, never by the checkout page itself.'
+    : st.state === 'missing-config'
+      ? 'Purchases are not available yet: checkout is not configured for this build.'
+      : 'Purchases are not available yet. Live billing has not been turned on, so no charge can be made from this page.';
+  if(!options.length) return `<p class="quiet" data-purchase-note="1">${note}</p>`;
+  const rows = options.map(o => `<div class="hd-purchase-row"><span>${esc(o.label || o.id || 'Credits')}</span><span>${esc(formatPrice(o.price_cents))}</span><button class="btn small ${st.enabled ? 'primary' : 'ghost'}" type="button" data-purchase-option="${esc(o.id || '')}"${st.enabled ? '' : ' disabled'}>Buy</button></div>`).join('');
+  return `${rows}<p class="quiet" data-purchase-note="1">${note}</p>`;
+}
+function purchaseOptionClick(optionId){
+  const st = purchaseControlState();
+  if(st.state !== 'ready'){
+    setStatus('Purchases are not available yet. No charge can be made from this page.');
+    return st;
+  }
+  if(typeof window !== 'undefined' && typeof window.open === 'function'){
+    window.open(st.checkoutUrl, '_blank', 'noopener');
+  }
+  return st;
+}
+
+/* Concierge sessions record (follow-up design sections 5 to 7). */
+let conciergeSessionsStateName = 'unauthorized';
+let conciergeSessionsData = null;
+let conciergeSessionSelectedId = null;
+let conciergeSessionsPending = false;
+const CONCIERGE_SESSIONS_STATE_MESSAGES = {
+  'missing-config': 'Concierge sessions are not configured in this build yet.',
+  'unauthorized': 'Secure access is not active, so your concierge sessions cannot load yet. When live access is connected and you are signed in, your session record shows here.',
+  'ready': 'Your concierge sessions can load now.',
+  'pending': 'Loading your concierge sessions.',
+  'loaded': 'Your concierge sessions are loaded.',
+  'failure': 'Your concierge sessions could not be loaded. The concierge service may not be connected in this build yet.'
+};
+const CONCIERGE_OUTCOME_LABELS = { open: 'Open', answered: 'Answered', escalated: 'Escalated', closed: 'Closed' };
+function conciergeSessionsInitialState(){
+  if(!helpdeskContractPresent()) return 'missing-config';
+  if(!hubSessionToken) return 'unauthorized';
+  return 'ready';
+}
+function getConciergeSessionsState(){ return conciergeSessionsStateName; }
+function getConciergeSessions(){ return conciergeSessionsData; }
+function renderConciergeSessionsStatus(){
+  const el = document.querySelector('[data-concierge-sessions-status]');
+  if(el){
+    el.dataset.conciergeSessionsState = conciergeSessionsStateName;
+    el.textContent = CONCIERGE_SESSIONS_STATE_MESSAGES[conciergeSessionsStateName] || CONCIERGE_SESSIONS_STATE_MESSAGES.ready;
+  }
+}
+function setConciergeSessionsState(name){
+  conciergeSessionsStateName = name;
+  renderConciergeSessionsStatus();
+}
+async function loadConciergeSessions(fetchFn){
+  if(!helpdeskContractPresent()){ setConciergeSessionsState('missing-config'); return conciergeSessionsStateName; }
+  if(!hubSessionToken){ setConciergeSessionsState('unauthorized'); return conciergeSessionsStateName; }
+  if(conciergeSessionsPending) return conciergeSessionsStateName;
+  const doFetch = fetchFn || (typeof window !== 'undefined' ? window.fetch : null);
+  if(!doFetch){ setConciergeSessionsState('failure'); return conciergeSessionsStateName; }
+  conciergeSessionsPending = true;
+  setConciergeSessionsState('pending');
+  let outcome = 'failure';
+  try{
+    const cfg = authConfig();
+    const slug = encodeURIComponent(cfg.tenant_slug || '');
+    const res = await doFetch(`${cfg.client_hub_api_base}/api/concierge/sessions?tenant=${slug}`, { headers: { Authorization: `Bearer ${hubSessionToken}` } });
+    if(res.status === 401 || res.status === 403){
+      outcome = 'unauthorized';
+    } else if(res.status === 200){
+      const body = await res.json();
+      conciergeSessionsData = Array.isArray(body.sessions) ? body.sessions : [];
+      outcome = 'loaded';
+    }
+  }catch(e){
+    outcome = 'failure';
+  }
+  conciergeSessionsPending = false;
+  setConciergeSessionsState(outcome);
+  renderConciergeSessionsList();
+  return conciergeSessionsStateName;
+}
+function renderConciergeSessionsList(){
+  const box = document.querySelector('[data-concierge-sessions-list]');
+  if(!box) return;
+  if(!Array.isArray(conciergeSessionsData)){ box.innerHTML = ''; return; }
+  if(!conciergeSessionsData.length){
+    box.innerHTML = '<p class="quiet">No concierge sessions yet. Messages you send to the concierge appear here.</p>';
+    return;
+  }
+  box.innerHTML = conciergeSessionsData.map(sd => {
+    const count = sd.messageCount != null ? sd.messageCount : (Array.isArray(sd.messages) ? sd.messages.length : 0);
+    return `<button class="hd-session-row" type="button" data-concierge-session="${esc(sd.id)}"><strong>${esc(String(sd.startedAt || '').slice(0, 10))}</strong><span>${count} message${count === 1 ? '' : 's'}</span><span>${esc(CONCIERGE_OUTCOME_LABELS[sd.outcome] || 'Open')}</span></button>`;
+  }).join('');
+  bindConciergeSessionButtons();
+}
+function bindConciergeSessionButtons(){
+  document.querySelectorAll('[data-concierge-session]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => { selectConciergeSession(btn.dataset.conciergeSession); }); });
+}
+function selectConciergeSession(id){
+  const found = (conciergeSessionsData || []).find(sd => sd.id === id) || null;
+  conciergeSessionSelectedId = found ? found.id : null;
+  renderConciergeSessionDetail();
+  return found;
+}
+function renderConciergeSessionDetail(){
+  const box = document.querySelector('[data-concierge-session-detail]');
+  if(!box) return;
+  const session = (conciergeSessionsData || []).find(sd => sd.id === conciergeSessionSelectedId) || null;
+  if(!session){ box.innerHTML = ''; return; }
+  const lines = (session.messages || []).map(m => `<div class="hd-transcript-line"><span>${esc(String(m.createdAt || '').slice(0, 16).replace('T', ' '))}</span><p>${esc(m.message || '')}</p></div>`).join('');
+  let resolutionHtml;
+  if(session.resolution){
+    const r0 = session.resolution;
+    resolutionHtml = `<div class="hd-resolution"><h4>Resolution: ${esc(CONCIERGE_OUTCOME_LABELS[r0.outcome] || r0.outcome || '')}</h4><p>${esc(r0.resolutionText || '')}</p><p class="quiet">Resolved by ${esc(r0.resolvedBy || 'HaydenWorks')} on ${esc(String(r0.resolvedAt || '').slice(0, 10))}.</p></div>`;
+  } else {
+    resolutionHtml = '<p class="quiet">No resolution recorded yet. This session is still open.</p>';
+  }
+  box.innerHTML = `<div class="hd-session-detail"><h4>Session from ${esc(String(session.startedAt || '').slice(0, 10))}</h4>${lines}${resolutionHtml}</div>`;
 }
 
 /* Phase 5 (Scope G): Help Desk credit surfaces.
@@ -515,13 +759,25 @@ function renderHelpDeskBuckets(balance){
   if(!balance || !balance.buckets) return '<p class="quiet">No balance loaded yet. Use Check credit balance after secure access is active.</p>';
   const b = balance.buckets;
   const prem = b.premium || {};
-  let html = `<div class="hd-bucket premium"><div class="hd-bucket-head"><strong>${esc(prem.label || 'Help Desk Premium')}</strong><span class="badge gold">Separate allowance</span></div><p>${prem.available != null ? prem.available : 0} of ${prem.monthlyAllowance != null ? prem.monthlyAllowance : 4} call credits remain for ${esc(serviceMonthLabel(prem.serviceMonth))}.</p><p class="quiet">This allowance resets each service month and never rolls over. It is kept separate from every other credit balance.</p></div>`;
-  const row = (label, bucket) => {
+  let html = `<div class="hd-bucket premium"><div class="hd-bucket-head"><strong>${esc(prem.label || 'Help Desk Premium')}</strong><span class="badge gold">Separate allowance</span></div><p>${prem.available != null ? prem.available : 0} of ${prem.monthlyAllowance != null ? prem.monthlyAllowance : 4} call credits remain for ${esc(serviceMonthLabel(prem.serviceMonth))}.</p><p class="quiet">This allowance resets each service month and never rolls over. It is kept separate from every other credit balance.</p>${prem.expiresAt ? `<p class="quiet">This service month ends ${esc(String(prem.expiresAt).slice(0, 10))}; unused Premium calls expire then.</p>` : ''}</div>`;
+  const row = (label, bucket, meta) => {
     const avail = bucket && bucket.available != null ? bucket.available : 0;
     const held = bucket && bucket.held ? `, ${bucket.held} on hold` : '';
-    return `<div class="hd-bucket"><strong>${label}</strong><span>${avail} available${held}</span></div>`;
+    return `<div class="hd-bucket"><strong>${label}</strong><span>${avail} available${held}</span>${meta ? `<span class="hd-meta">${esc(meta)}</span>` : ''}</div>`;
   };
-  html += row('Purchased credits', b.purchased) + row('Subscription credits', b.subscription) + row('Granted credits', b.grant);
+  const expiryMeta = (bucket) => (bucket && bucket.nextExpiresAt ? `Next expiry ${String(bucket.nextExpiresAt).slice(0, 10)}` : '');
+  const subMeta = [b.subscription && b.subscription.rolloverDate ? `Rolls over ${String(b.subscription.rolloverDate).slice(0, 10)}, up to the cap of 8 credits` : '', expiryMeta(b.subscription)].filter(Boolean).join(' · ');
+  html += row('Purchased credits', b.purchased, expiryMeta(b.purchased)) + row('Subscription credits', b.subscription, subMeta) + row('Granted credits', b.grant, expiryMeta(b.grant));
+  if(balance.subscriptionStatus){
+    const ss = balance.subscriptionStatus;
+    html += `<p class="quiet">Subscription: ${ss.active ? `active, ${ss.creditsPerMonth != null ? ss.creditsPerMonth : 4} credits per month` : 'not active'}${ss.nextRolloverAt ? `. Next rollover ${String(ss.nextRolloverAt).slice(0, 10)}` : ''}.</p>`;
+  }
+  if(balance.lastSession){
+    const ls = balance.lastSession;
+    html += `<p class="quiet">Last Help Desk call: ${esc(ls.sessionKind || 'session')} session on ${esc(String(ls.completedAt || '').slice(0, 10))}, ${ls.credits != null ? ls.credits : 0} credit${ls.credits === 1 ? '' : 's'} used.</p>`;
+  } else if(balance.lastSession === null){
+    html += '<p class="quiet">No completed Help Desk calls yet.</p>';
+  }
   html += `<p class="quiet">Total available: ${balance.totalAvailable != null ? balance.totalAvailable : 0} credits${balance.totalHeld ? `, ${balance.totalHeld} on hold` : ''}.</p>`;
   if(balance.overdraftOutstanding > 0) html += `<p class="quiet">An emergency overdraft of ${balance.overdraftOutstanding} credit${balance.overdraftOutstanding === 1 ? '' : 's'} is outstanding. New credits repay it first.</p>`;
   return html;
@@ -533,7 +789,7 @@ function renderHelpDeskHistory(entries){
 }
 function helpdeskCardsHtml(){
   helpdeskStateName = checkoutReturnState(currentCheckoutSearch()) || helpdeskInitialState();
-  return `<article class="card"><h2>Help Desk credits</h2><div class="hd-shadow"><strong>Shadow mode.</strong> This credit record proves the Help Desk lifecycle for reconciliation. No live charges are possible in this build, and no payment is ever taken on this screen.</div><p class="concierge-status" id="helpdeskStatus" data-helpdesk-state="${helpdeskStateName}">${esc(HELPDESK_STATE_MESSAGES[helpdeskStateName])}</p><div id="helpdeskBuckets">${renderHelpDeskBuckets(null)}</div><div class="screen-actions"><button class="btn ghost" type="button" data-helpdesk-load="1">Check credit balance</button><button class="btn primary" type="button" disabled>Buy credits</button></div><p class="quiet">Purchases stay disabled until live billing is approved. In this build, bookings and balances are Shadow records kept for reconciliation.</p></article><article class="card"><h2>Credit history</h2><div id="helpdeskHistoryList">${renderHelpDeskHistory(null)}</div></article>`;
+  return `<article class="card"><h2>Help Desk credits</h2><div class="hd-shadow"><strong>Shadow mode.</strong> This credit record proves the Help Desk lifecycle for reconciliation. No live charges are possible in this build, and no payment is ever taken on this screen.</div><p class="concierge-status" id="helpdeskStatus" data-helpdesk-state="${helpdeskStateName}">${esc(HELPDESK_STATE_MESSAGES[helpdeskStateName])}</p><div id="helpdeskBuckets">${renderHelpDeskBuckets(null)}</div><div class="screen-actions"><button class="btn ghost" type="button" data-helpdesk-load="1">Check credit balance</button><button class="btn primary" type="button" disabled>Buy credits</button></div><p class="quiet">Purchases stay disabled until live billing is approved. In this build, bookings and balances are Shadow records kept for reconciliation.</p><div class="hd-purchase"><h3>Buy more credits</h3>${purchaseOptionsHtml()}</div></article><article class="card"><h2>Credit history</h2><div id="helpdeskHistoryList">${renderHelpDeskHistory(null)}</div></article><article class="card"><h2>Concierge sessions</h2><p>Your concierge chat sessions, with the full transcript of each one and how it was resolved.</p><p class="concierge-status" data-concierge-sessions-status="1">${esc(CONCIERGE_SESSIONS_STATE_MESSAGES[conciergeSessionsInitialState()])}</p><div class="screen-actions"><button class="btn ghost" type="button" data-concierge-sessions-load="1">View concierge sessions</button></div><div data-concierge-sessions-list="1"></div><div data-concierge-session-detail="1"></div></article>`;
 }
 function renderHelpDeskStatus(){
   const el = $('helpdeskStatus');
@@ -656,10 +912,21 @@ function boot(){
   conciergeBtn.id = 'conciergeBtn';
   conciergeBtn.type = 'button';
   conciergeBtn.className = 'concierge-btn hidden';
-  conciergeBtn.setAttribute('aria-label', 'Concierge: open the Help Desk');
-  conciergeBtn.innerHTML = '<span class="concierge-mark" aria-hidden="true">☺?</span><span>Concierge</span>';
+  conciergeBtn.setAttribute('aria-label', 'Concierge: open the concierge chat');
+  conciergeBtn.innerHTML = '<span class="concierge-mark" aria-hidden="true">🎀</span><span>Concierge</span>';
   conciergeBtn.addEventListener('click', openConcierge);
   document.body.appendChild(conciergeBtn);
+  const conciergePopup = document.createElement('div');
+  conciergePopup.id = 'conciergePopup';
+  conciergePopup.className = 'concierge-popup hidden';
+  conciergePopup.setAttribute('role', 'dialog');
+  conciergePopup.setAttribute('aria-modal', 'true');
+  conciergePopup.setAttribute('aria-labelledby', 'conciergePopupTitle');
+  conciergePopup.innerHTML = '<div class="concierge-popup-card"><div class="concierge-popup-head"><h2 id="conciergePopupTitle" tabindex="-1">Concierge</h2><div class="concierge-popup-actions"><button class="btn small primary" type="button" data-concierge-helpdesk="1">Visit Help Desk</button><button class="btn small ghost" type="button" data-concierge-close="1" aria-label="Close concierge chat">Close</button></div></div><div class="concierge-popup-body" id="conciergePopupBody"></div></div>';
+  conciergePopup.addEventListener('keydown', handleConciergePopupKeydown);
+  document.body.appendChild(conciergePopup);
+  if(typeof document.addEventListener === 'function'){ document.addEventListener('keydown', handleConciergePopupKeydown); }
+  bindConciergePopupActions();
   updateConciergeVisibility(activeSceneId());
   const accessHost = (document.querySelector && document.querySelector('.access-card')) || $('scene-access');
   if(accessHost){ authPanelEl = createAuthPanel(); accessHost.appendChild(authPanelEl); renderAuthPanel(); }
