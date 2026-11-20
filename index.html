@@ -497,8 +497,8 @@ window.CLIENT_HUB_CONFIG = {
     "supabase_publishable_key_kind": "public client key, returned by the live ohq /api/config on 2026-11-19; public by design, not a secret",
     "tenant_slug": "cgf",
     "token_handling": "Session tokens are held in page memory only, never in browser storage, never in Notion or Drive records, and never logged. This build collects no credentials and has no sign-in form.",
-    "shell_origin": "https://client.haydenworks.us",
-    "shell_origin_status": "Set at package generation time. Must match the client-hub function secret CORS_ALLOWED_ORIGINS exactly, or the browser will block API calls from this shell.",
+    "shell_origin": "https://REPLACE-WITH-FINAL-SHELL-ORIGIN",
+    "shell_origin_status": "PLACEHOLDER: the static host address is not final yet. Regenerate this package with SHELL_ORIGIN set to the real shell origin and set the client-hub function secret CORS_ALLOWED_ORIGINS to the same exact value before go-live.",
     "planned_shell_origin": "https://client.haydenworks.us",
     "planned_shell_origin_status": "Working name requested by Hayden 2026-11-20 (subdomain of haydenworks.us). Not live until the DNS and host steps in the deploy runbook complete."
   }
