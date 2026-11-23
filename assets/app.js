@@ -110,6 +110,7 @@ function bindDynamicActions(){
   document.querySelectorAll('[data-helpdesk-load]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => { loadHelpDesk(null); }); });
   document.querySelectorAll('[data-concierge-sessions-load]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => { loadConciergeSessions(null); }); });
   document.querySelectorAll('[data-purchase-option]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => { purchaseOptionClick(btn.dataset.purchaseOption || ''); }); });
+  document.querySelectorAll('[data-picker-tenant]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => { selectPickerTenant(btn.dataset.pickerTenant); }); });
   document.querySelectorAll('[data-gallery-img]').forEach(img => { if(img.dataset.hubBound) return; img.dataset.hubBound = '1'; img.addEventListener('error', () => { const note = document.createElement('div'); note.className = 'img-fallback'; note.textContent = 'Preview unavailable. The source image could not be loaded.'; img.replaceWith(note); setStatus('A preview image could not be loaded. The source may need checking.'); }); });
 }
 function setFocus(title, kicker, subtitle, body){
@@ -229,10 +230,21 @@ let hubAuthIdentity = null;
 let hubAuthPending = false;
 let authPanelEl = null;
 let authStatusEl = null;
+/* Picker release (plan/PICKER-DESIGN.md): the served memberships the
+   picker offers, and the tenant the user has opened. The active
+   tenant stays null until a single-membership sign-in resolves it or
+   the user picks an entry: no tenant-scoped call is made before
+   that, so no tenant data loads before selection. */
+let hubMemberships = [];
+let hubPickerEntries = [];
+let hubActiveTenant = null;
+let hubServedSlugs = null;
+let switchBrandBtn = null;
 const AUTH_STATE_MESSAGES = {
   'signed-out': 'Not signed in. No live sign-in is connected to this build yet.',
   'pending': 'Checking secure access.',
   'signed-in': 'Signed in.',
+  'picker': 'Signed in. Choose your brand to continue.',
   'denied': 'This account does not have access to the Come Get Funded Client Hub. This Hub is limited to its own client tenant.',
   'expired': 'Your session has expired. When live access is connected, sign in again to continue.',
   'tampered': 'The session token was rejected as invalid. It may have been altered, or issued for a different service.',
@@ -256,11 +268,29 @@ function renderAuthPanel(){
   if(!authPanelEl || !authStatusEl) return;
   authPanelEl.dataset.authState = hubAuthStateName;
   let message = AUTH_STATE_MESSAGES[hubAuthStateName] || AUTH_STATE_MESSAGES['signed-out'];
+  if(hubAuthStateName === 'picker' && hubAuthIdentity){
+    message = `Signed in as ${hubAuthIdentity.email || 'verified account'}. Choose your brand to continue.`;
+  }
   if(hubAuthStateName === 'signed-in' && hubAuthIdentity){
     const roles = (hubAuthIdentity.tenants || []).map(t => t.role).filter(Boolean).join(', ');
-    message = `Signed in as ${hubAuthIdentity.email || 'verified account'}. Tenant access: Come Get Funded. Roles: ${roles || 'member'}.`;
+    const activeEntry = hubPickerEntries.find(e => e.tenant === hubActiveTenant) || null;
+    const accessLabel = activeEntry ? (activeEntry.name || activeEntry.tenant) : 'Come Get Funded';
+    message = `Signed in as ${hubAuthIdentity.email || 'verified account'}. Tenant access: ${accessLabel}. Roles: ${roles || 'member'}.`;
   }
   authStatusEl.textContent = message;
+  updateSwitchBrandVisibility();
+}
+function updateSwitchBrandVisibility(){
+  if(!switchBrandBtn) return;
+  const show = hubPickerEntries.length > 1 && hubAuthStateName !== 'signed-out';
+  switchBrandBtn.classList.toggle('hidden', !show);
+}
+function getHubPickerEntries(){ return hubPickerEntries; }
+function getHubActiveTenant(){ return hubActiveTenant; }
+function activeTenantSlug(){
+  if(hubActiveTenant) return hubActiveTenant;
+  const cfg = authConfig();
+  return (cfg && cfg.tenant_slug) || '';
 }
 function setHubAuthState(name, identity){
   hubAuthStateName = name;
@@ -282,9 +312,20 @@ async function checkHubSession(fetchFn){
     try{ body = await res.json(); }catch(e){ body = {}; }
     if(res.status === 200){
       const tenants = Array.isArray(body.tenants) ? body.tenants : [];
-      const slug = cfg.tenant_slug || '';
-      if(slug && !tenants.some(t => t.tenant === slug)){ setHubAuthState('denied'); }
-      else { setHubAuthState('signed-in', { email: body.email || '', tenants }); }
+      hubMemberships = tenants;
+      const served = await servedTenantSlugs(doFetch, cfg);
+      const servedSet = served && served.length ? served : (cfg.tenant_slug ? [cfg.tenant_slug] : []);
+      hubPickerEntries = tenants.filter(t => servedSet.includes(t.tenant));
+      if(!hubPickerEntries.length){ setHubAuthState('denied'); }
+      else if(hubPickerEntries.length === 1){
+        hubActiveTenant = hubPickerEntries[0].tenant;
+        setHubAuthState('signed-in', { email: body.email || '', tenants });
+      } else {
+        hubActiveTenant = null;
+        setHubAuthState('picker', { email: body.email || '', tenants });
+        await loadPickerBadges(doFetch);
+        renderTenantPicker();
+      }
     } else {
       setHubAuthState(classifyAuthStatus(res.status, body && body.error));
     }
@@ -294,6 +335,99 @@ async function checkHubSession(fetchFn){
   hubAuthPending = false;
   renderAuthPanel();
   return hubAuthStateName;
+}
+/* Picker release: the served tenant slugs come from the function's
+   public config (the tenant directory the Client Hub serves). Any
+   failure or unexpected shape returns null and the caller falls back
+   to the configured pilot slug: the picker never invents a served
+   tenant. A good read is cached for the page session. */
+async function servedTenantSlugs(fetchFn, cfg){
+  if(hubServedSlugs && hubServedSlugs.length) return hubServedSlugs;
+  const doFetch = fetchFn || (typeof window !== 'undefined' ? window.fetch : null);
+  if(!doFetch || !cfg || !cfg.client_hub_api_base) return null;
+  try{
+    const res = await doFetch(`${cfg.client_hub_api_base}/api/config`);
+    if(res.status !== 200) return null;
+    const body = await res.json();
+    const slugs = (Array.isArray(body.tenants) ? body.tenants : []).map(t => t && t.slug).filter(Boolean);
+    if(slugs.length) hubServedSlugs = slugs;
+    return slugs.length ? slugs : null;
+  }catch(e){
+    return null;
+  }
+}
+/* Picker release: merge the server's answers-waiting counts into the
+   picker entries. A failed or unconfigured badge read leaves the
+   entries badgeless: counts are rendered only from a real 200. */
+async function loadPickerBadges(fetchFn){
+  if(!hubSessionToken || !hubPickerEntries.length) return hubPickerEntries;
+  const cfg = authConfig();
+  if(!cfg || !cfg.client_hub_api_base) return hubPickerEntries;
+  const doFetch = fetchFn || (typeof window !== 'undefined' ? window.fetch : null);
+  if(!doFetch) return hubPickerEntries;
+  try{
+    const res = await doFetch(`${cfg.client_hub_api_base}/api/picker/badges`, { headers: { Authorization: `Bearer ${hubSessionToken}` } });
+    if(res.status === 200){
+      const body = await res.json();
+      const bySlug = new Map((Array.isArray(body.tenants) ? body.tenants : []).map(t => [t.tenant, t.badge]));
+      for(const entry of hubPickerEntries){
+        if(bySlug.has(entry.tenant)) entry.badge = bySlug.get(entry.tenant);
+      }
+    }
+  }catch(e){ /* badgeless entries are the truthful fallback */ }
+  return hubPickerEntries;
+}
+function pickerEntriesHtml(){
+  return hubPickerEntries.map(e => {
+    const badge = e.badge > 0 ? `<span class="picker-badge">${e.badge} answer${e.badge === 1 ? '' : 's'} waiting</span>` : '';
+    const status = e.entitlementStatus ? `<span class="picker-status">${esc(e.entitlementStatus)}</span>` : '';
+    return `<button type="button" class="picker-entry" data-picker-tenant="${esc(e.tenant)}"><strong>${esc(e.name || e.tenant)}</strong>${status}<span class="picker-role">${esc(e.role || 'member')}</span>${badge}</button>`;
+  }).join('');
+}
+/* The picker is a focused screen in the menu's style, reached through
+   the same setFocus path as every other focused screen (heading
+   focus per Phase 7). Its Back path returns to Secure Access, not
+   into a hub: no tenant is open until an entry is chosen. */
+function renderTenantPicker(){
+  focusOrigin = 'scene-access';
+  return setFocus('Choose your brand', 'Your HaydenWorks brands and projects', 'Pick the brand or project you want to open. Nothing from a brand loads until you choose it.', `<div class="picker-list">${pickerEntriesHtml()}</div>`);
+}
+/* Switch path: re-open the picker with refreshed badges. The session
+   token is never touched here; switching brands is not signing out. */
+async function showTenantPicker(fetchFn){
+  await loadPickerBadges(fetchFn || null);
+  renderTenantPicker();
+  return hubPickerEntries;
+}
+/* Entering a tenant: set the active tenant, record the last-opened
+   marker through the Phase 4 write contract (which clears the badge
+   server-side for the next visit), clear the badge locally, and open
+   the menu. A failed marker write never blocks entry; the badge
+   simply reappears next time rather than the user being locked out
+   of their own hub over a bookkeeping write. */
+async function selectPickerTenant(slug, fetchFn){
+  const entry = hubPickerEntries.find(e => e.tenant === slug) || null;
+  if(!entry) return null;
+  hubActiveTenant = slug;
+  if(hubSessionToken){
+    const cfg = authConfig();
+    const doFetch = fetchFn || (typeof window !== 'undefined' ? window.fetch : null);
+    if(cfg && cfg.client_hub_api_base && doFetch){
+      try{
+        await doFetch(`${cfg.client_hub_api_base}/api/hub/writes`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${hubSessionToken}`, 'Content-Type': 'application/json', 'Idempotency-Key': newConciergeKey() },
+          body: JSON.stringify({ tenant: slug, action: 'picker.tenant.open', data: {} })
+        });
+      }catch(e){ /* entry proceeds; see the note above */ }
+    }
+  }
+  entry.badge = 0;
+  setHubAuthState('signed-in', hubAuthIdentity);
+  setStatus(`Opening ${entry.name || slug}.`);
+  showScene('scene-menu');
+  focusEl($('packageTitle'));
+  return entry;
 }
 function attemptHubSignIn(fetchFn){
   const cfg = authConfig();
@@ -419,7 +553,7 @@ async function submitConciergeInquiry(fetchFn, message, options){
   try{
     const cfg = authConfig();
     const concierge = conciergeConfig();
-    const payload = { tenant: cfg.tenant_slug || '', source: concierge.source_identifier, message: text, escalation: { requested: false, emergency: false } };
+    const payload = { tenant: activeTenantSlug(), source: concierge.source_identifier, message: text, escalation: { requested: false, emergency: false } };
     if(options && options.chatSession){
       if(!conciergeChatSessionId) conciergeChatSessionId = newChatSessionId();
       payload.chatSessionId = conciergeChatSessionId;
@@ -623,7 +757,7 @@ async function loadConciergeSessions(fetchFn){
   let outcome = 'failure';
   try{
     const cfg = authConfig();
-    const slug = encodeURIComponent(cfg.tenant_slug || '');
+    const slug = encodeURIComponent(activeTenantSlug());
     const res = await doFetch(`${cfg.client_hub_api_base}/api/concierge/sessions?tenant=${slug}`, { headers: { Authorization: `Bearer ${hubSessionToken}` } });
     if(res.status === 401 || res.status === 403){
       outcome = 'unauthorized';
@@ -817,7 +951,7 @@ async function loadHelpDesk(fetchFn){
   let outcome = 'failure';
   try{
     const cfg = authConfig();
-    const slug = encodeURIComponent(cfg.tenant_slug || '');
+    const slug = encodeURIComponent(activeTenantSlug());
     const headers = { Authorization: `Bearer ${hubSessionToken}` };
     const balRes = await doFetch(`${cfg.client_hub_api_base}/api/helpdesk/balance?tenant=${slug}`, { headers });
     if(balRes.status === 401 || balRes.status === 403){
@@ -928,6 +1062,19 @@ function boot(){
   if(typeof document.addEventListener === 'function'){ document.addEventListener('keydown', handleConciergePopupKeydown); }
   bindConciergePopupActions();
   updateConciergeVisibility(activeSceneId());
+  /* Picker release: the Switch brand button lives on the menu scene
+     and is visible only for a signed-in user with more than one
+     served membership (updateSwitchBrandVisibility, driven from the
+     auth panel renders). It returns to the picker without signing
+     out. */
+  switchBrandBtn = document.createElement('button');
+  switchBrandBtn.id = 'switchBrandBtn';
+  switchBrandBtn.type = 'button';
+  switchBrandBtn.className = 'btn ghost hidden';
+  switchBrandBtn.textContent = 'Switch brand';
+  switchBrandBtn.addEventListener('click', () => { showTenantPicker(); });
+  const menuScene = $('scene-menu');
+  if(menuScene){ menuScene.appendChild(switchBrandBtn); }
   const accessHost = (document.querySelector && document.querySelector('.access-card')) || $('scene-access');
   if(accessHost){ authPanelEl = createAuthPanel(); accessHost.appendChild(authPanelEl); renderAuthPanel(); }
   bindDynamicActions();

@@ -76,3 +76,11 @@ button,a{font:inherit}:focus-visible{outline:2px solid var(--cyan);outline-offse
 .hd-resolution{border:1px solid rgba(231,199,109,.4);border-radius:12px;padding:10px 12px;margin-top:10px}
 .hd-resolution h4{margin:0 0 6px}
 @media(max-width:560px){.concierge-popup{padding:10px}.concierge-popup-card{max-height:88vh}}
+.picker-list{display:grid;gap:12px;max-width:640px}
+.picker-entry{display:flex;width:100%;align-items:center;gap:12px;flex-wrap:wrap;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.10);border-radius:20px;color:var(--text);padding:16px;cursor:pointer;text-align:left;font:inherit;transition:.2s ease;min-height:44px}
+.picker-entry:hover{transform:translateY(-2px);border-color:rgba(54,204,255,.42);background:rgba(54,204,255,.09)}
+.picker-entry strong{font-size:17px}
+.picker-status{border:1px solid rgba(231,199,109,.32);background:rgba(231,199,109,.08);border-radius:999px;padding:5px 9px;font-size:11px;font-weight:800;text-transform:capitalize}
+.picker-role{color:var(--muted);font-size:12px;margin-left:auto}
+.picker-badge{border:1px solid rgba(116,227,160,.38);background:rgba(116,227,160,.12);color:#dbffe9;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:800}
+#switchBrandBtn{position:absolute;left:22px;bottom:calc(20px + var(--safe-bottom));z-index:60}
