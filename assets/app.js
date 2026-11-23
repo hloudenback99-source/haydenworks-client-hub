@@ -216,20 +216,39 @@ function renderFocus(screen, origin){
    - A signed-in state is rendered ONLY after a 200 from /api/me whose
      tenant list includes the configured tenant slug. Nothing else, no
      button click, no local flag, can produce it.
-   - The client-hub function is not deployed in this phase, so a sign-in
-     attempt with no session token ends in backend-unreachable, and a
-     missing auth config ends in missing-config. No fake login success.
-   - This build collects no credentials and has no sign-in form. When
-     live access is activated, the token arrives from the Supabase Auth
-     flow on the shared stack and is handed to setHubSessionToken.
-   - The token is held in page memory only: never in browser storage,
-     never in Notion or Drive records, never logged, never rendered. */
+   - A missing auth config ends in missing-config. No fake login success.
+
+   Auth surface (2026-11-23): the panel now carries the sign-in surface
+   the Phase 3 client always assumed would hand it a token. Credentials
+   are entered in the Secure Access form and sent directly to Supabase
+   Auth over HTTPS (POST /auth/v1/token?grant_type=password on
+   CONFIG.auth.supabase_url, with the public publishable key). Invite
+   and password-recovery links land back on this shell with the session
+   in the URL hash; the shell strips the hash at once, holds the token
+   as a pending credential, and lets the client set a password
+   (PUT /auth/v1/user) before any /api/me check runs. Forgot password
+   posts to /auth/v1/recover with this page as the redirect target.
+   - Credentials and tokens live in page memory only: never in browser
+     storage, never in Notion or Drive records, never logged, never
+     rendered. Passwords are read from the form at submit and forgotten. */
 let hubAuthStateName = 'signed-out';
 let hubSessionToken = null;
 let hubAuthIdentity = null;
 let hubAuthPending = false;
 let authPanelEl = null;
 let authStatusEl = null;
+/* Auth surface state: the panel mode is separate from the /api/me
+   state machine. 'signin' is the resting mode; 'set-password' follows
+   an invite or recovery landing; 'link-expired' follows a hash error;
+   'reset-sent' follows a successful recover request. The pending
+   credential is the invite or recovery token, held only until the
+   password is set. authFormEls holds the panel's element references,
+   built once by createAuthPanel. */
+let hubAuthMode = 'signin';
+let hubPendingCredential = null;
+let hubAuthNotice = null;
+let hubCredPending = false;
+let authFormEls = null;
 /* Picker release (plan/PICKER-DESIGN.md): the served memberships the
    picker offers, and the tenant the user has opened. The active
    tenant stays null until a single-membership sign-in resolves it or
@@ -241,14 +260,14 @@ let hubActiveTenant = null;
 let hubServedSlugs = null;
 let switchBrandBtn = null;
 const AUTH_STATE_MESSAGES = {
-  'signed-out': 'Not signed in. No live sign-in is connected to this build yet.',
+  'signed-out': 'Not signed in. Sign in with your email and password to open your hub.',
   'pending': 'Checking secure access.',
   'signed-in': 'Signed in.',
   'picker': 'Signed in. Choose your brand to continue.',
   'denied': 'This account does not have access to the Come Get Funded Client Hub. This Hub is limited to its own client tenant.',
-  'expired': 'Your session has expired. When live access is connected, sign in again to continue.',
+  'expired': 'Your session has expired. Sign in again to continue.',
   'tampered': 'The session token was rejected as invalid. It may have been altered, or issued for a different service.',
-  'backend-unreachable': 'The secure access service is not available yet. The Client Hub backend is not deployed, so sign-in cannot complete in this build.',
+  'backend-unreachable': 'The secure access service could not be reached. Check your connection, then try again.',
   'missing-config': 'Secure access is not configured yet. Configuration is needed before sign-in can work.'
 };
 function authConfig(){ return CONFIG.auth || null; }
@@ -267,7 +286,11 @@ function setHubSessionToken(token){ hubSessionToken = token || null; }
 function renderAuthPanel(){
   if(!authPanelEl || !authStatusEl) return;
   authPanelEl.dataset.authState = hubAuthStateName;
+  authPanelEl.dataset.authMode = hubAuthMode;
   let message = AUTH_STATE_MESSAGES[hubAuthStateName] || AUTH_STATE_MESSAGES['signed-out'];
+  if(hubAuthMode === 'set-password') message = 'Choose a new password to finish setting up your access.';
+  if(hubAuthMode === 'link-expired') message = 'This sign-in link has expired or is no longer valid. Enter your email below and choose Forgot password to get a new link.';
+  if(hubAuthMode === 'reset-sent') message = 'Check your email for the password reset link. It brings you back here to choose a new password.';
   if(hubAuthStateName === 'picker' && hubAuthIdentity){
     message = `Signed in as ${hubAuthIdentity.email || 'verified account'}. Choose your brand to continue.`;
   }
@@ -277,7 +300,20 @@ function renderAuthPanel(){
     const accessLabel = activeEntry ? (activeEntry.name || activeEntry.tenant) : 'Come Get Funded';
     message = `Signed in as ${hubAuthIdentity.email || 'verified account'}. Tenant access: ${accessLabel}. Roles: ${roles || 'member'}.`;
   }
+  if(hubAuthNotice) message = hubAuthNotice;
   authStatusEl.textContent = message;
+  if(authFormEls){
+    const busy = hubAuthPending || hubCredPending;
+    const showSignIn = (hubAuthMode === 'signin' || hubAuthMode === 'link-expired')
+      && hubAuthStateName !== 'pending' && hubAuthStateName !== 'signed-in' && hubAuthStateName !== 'picker';
+    authFormEls.signInWrap.classList.toggle('hidden', !showSignIn);
+    authFormEls.setPwWrap.classList.toggle('hidden', hubAuthMode !== 'set-password');
+    authFormEls.modeActions.classList.toggle('hidden', !(hubAuthMode === 'reset-sent' || hubAuthMode === 'link-expired'));
+    authFormEls.signOutBtn.classList.toggle('hidden', !(hubAuthStateName === 'signed-in' || hubAuthStateName === 'picker'));
+    authFormEls.signInBtn.disabled = busy;
+    authFormEls.forgotBtn.disabled = busy;
+    authFormEls.setPwBtn.disabled = busy;
+  }
   updateSwitchBrandVisibility();
 }
 function updateSwitchBrandVisibility(){
@@ -295,7 +331,36 @@ function activeTenantSlug(){
 function setHubAuthState(name, identity){
   hubAuthStateName = name;
   hubAuthIdentity = identity || null;
+  hubAuthNotice = null;
   renderAuthPanel();
+}
+function getHubAuthMode(){ return hubAuthMode; }
+function getHubAuthNotice(){ return hubAuthNotice; }
+/* A flow-specific truthful message (a server error description, a
+   mismatch warning, a sent confirmation) shown ahead of the state
+   message until the next state change clears it. */
+function authNotice(text){
+  hubAuthNotice = text || null;
+  renderAuthPanel();
+}
+function supabaseAuthConfig(){
+  const cfg = authConfig();
+  if(!cfg || !cfg.supabase_url || !cfg.supabase_publishable_key) return null;
+  return { url: cfg.supabase_url, key: cfg.supabase_publishable_key };
+}
+function supabaseAuthError(body, fallback){
+  if(body && typeof body === 'object'){
+    if(typeof body.error_description === 'string' && body.error_description) return body.error_description;
+    if(typeof body.msg === 'string' && body.msg) return body.msg;
+    if(typeof body.message === 'string' && body.message) return body.message;
+  }
+  return fallback;
+}
+function clearAuthPasswordFields(){
+  if(!authFormEls) return;
+  if(authFormEls.pwInput) authFormEls.pwInput.value = '';
+  if(authFormEls.newPwInput) authFormEls.newPwInput.value = '';
+  if(authFormEls.confirmPwInput) authFormEls.confirmPwInput.value = '';
 }
 async function checkHubSession(fetchFn){
   const cfg = authConfig();
@@ -429,10 +494,196 @@ async function selectPickerTenant(slug, fetchFn){
   focusEl($('packageTitle'));
   return entry;
 }
+/* Auth surface flows. Each accepts an optional fetch implementation,
+   following the checkHubSession convention, so the harnesses can drive
+   them with stubs. None of them stores, logs, or renders a credential:
+   the password arguments are used to build one request body and then
+   dropped, and the issued token goes only to setHubSessionToken. */
+function parseAuthHash(hash){
+  const out = {};
+  const raw = String(hash || '').replace(/^#/, '');
+  if(!raw) return out;
+  for(const pair of raw.split('&')){
+    if(!pair) continue;
+    const eq = pair.indexOf('=');
+    const key = eq === -1 ? pair : pair.slice(0, eq);
+    const value = eq === -1 ? '' : pair.slice(eq + 1);
+    try{ out[decodeURIComponent(key)] = decodeURIComponent(value.replace(/\+/g, ' ')); }catch(e){ /* a malformed pair is ignored, never guessed */ }
+  }
+  return out;
+}
+/* Invite and recovery landing, run once from boot before the panel
+   renders. The hash is stripped immediately so the credential never
+   sits in the address bar or history. A hash error (an expired or
+   already used link) renders the truthful expired state and makes no
+   request of any kind. */
+function initAuthFromLocation(){
+  const loc = (typeof window !== 'undefined' && window.location) || null;
+  if(!loc || typeof loc.hash !== 'string' || !loc.hash) return hubAuthMode;
+  const params = parseAuthHash(loc.hash);
+  const stripHash = () => {
+    if(typeof window !== 'undefined' && window.history && typeof window.history.replaceState === 'function'){
+      try{ window.history.replaceState(null, '', (loc.pathname || '/') + (loc.search || '')); }catch(e){ /* the credential stays in memory either way */ }
+    }
+  };
+  if(params.error || params.error_code){
+    stripHash();
+    hubAuthMode = 'link-expired';
+    return hubAuthMode;
+  }
+  if(params.access_token && (params.type === 'invite' || params.type === 'recovery')){
+    stripHash();
+    hubPendingCredential = params.access_token;
+    hubAuthMode = 'set-password';
+  }
+  return hubAuthMode;
+}
+async function signInWithPassword(email, password, fetchFn){
+  const sb = supabaseAuthConfig();
+  if(!sb){ setHubAuthState('missing-config'); return hubAuthStateName; }
+  const cleanEmail = String(email || '').trim();
+  if(!cleanEmail || !password){
+    setHubAuthState('signed-out');
+    authNotice('Enter your email and password to sign in.');
+    return hubAuthStateName;
+  }
+  const doFetch = fetchFn || (typeof window !== 'undefined' ? window.fetch : null);
+  if(!doFetch){ setHubAuthState('backend-unreachable'); return hubAuthStateName; }
+  hubCredPending = true;
+  setHubAuthState('pending');
+  try{
+    const res = await doFetch(`${sb.url}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { apikey: sb.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail, password })
+    });
+    let body = {};
+    try{ body = await res.json(); }catch(e){ body = {}; }
+    hubCredPending = false;
+    clearAuthPasswordFields();
+    if(res.status === 200 && body && body.access_token){
+      setHubSessionToken(body.access_token);
+      return await checkHubSession(doFetch);
+    }
+    setHubAuthState('signed-out');
+    authNotice(supabaseAuthError(body, 'Sign-in failed. Check your email and password, then try again.'));
+    return hubAuthStateName;
+  }catch(e){
+    hubCredPending = false;
+    clearAuthPasswordFields();
+    setHubAuthState('backend-unreachable');
+    return hubAuthStateName;
+  }
+}
+async function submitHubPasswordSet(newPassword, confirmPassword, fetchFn){
+  if(!hubPendingCredential){
+    authNotice('There is no password setup in progress. Sign in, or use Forgot password to get a fresh link.');
+    return hubAuthMode;
+  }
+  if(!newPassword){
+    authNotice('Enter a new password.');
+    return hubAuthMode;
+  }
+  if(newPassword !== confirmPassword){
+    authNotice('The two passwords do not match. Enter them again.');
+    return hubAuthMode;
+  }
+  const sb = supabaseAuthConfig();
+  if(!sb){ setHubAuthState('missing-config'); return hubAuthStateName; }
+  const doFetch = fetchFn || (typeof window !== 'undefined' ? window.fetch : null);
+  if(!doFetch){ authNotice('The password could not be set because the service could not be reached. Try again.'); return hubAuthMode; }
+  hubCredPending = true;
+  renderAuthPanel();
+  try{
+    const res = await doFetch(`${sb.url}/auth/v1/user`, {
+      method: 'PUT',
+      headers: { apikey: sb.key, Authorization: `Bearer ${hubPendingCredential}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: newPassword })
+    });
+    let body = {};
+    try{ body = await res.json(); }catch(e){ body = {}; }
+    hubCredPending = false;
+    clearAuthPasswordFields();
+    if(res.status === 200){
+      const token = hubPendingCredential;
+      hubPendingCredential = null;
+      hubAuthMode = 'signin';
+      setHubSessionToken(token);
+      await checkHubSession(doFetch);
+      return hubAuthStateName;
+    }
+    authNotice(supabaseAuthError(body, 'The password could not be set. The link may have expired; use Forgot password to get a fresh one.'));
+    return hubAuthMode;
+  }catch(e){
+    hubCredPending = false;
+    clearAuthPasswordFields();
+    authNotice('The password could not be set because the service could not be reached. Try again.');
+    return hubAuthMode;
+  }
+}
+async function requestHubPasswordReset(email, fetchFn){
+  const cleanEmail = String(email || '').trim();
+  if(!cleanEmail){
+    authNotice('Enter your email above, then choose Forgot password.');
+    return hubAuthMode;
+  }
+  const sb = supabaseAuthConfig();
+  if(!sb){ setHubAuthState('missing-config'); return hubAuthStateName; }
+  const doFetch = fetchFn || (typeof window !== 'undefined' ? window.fetch : null);
+  if(!doFetch){ setHubAuthState('backend-unreachable'); return hubAuthStateName; }
+  const loc = (typeof window !== 'undefined' && window.location) || null;
+  const redirectTo = loc && loc.origin && loc.pathname ? loc.origin + loc.pathname : (loc ? loc.href : '');
+  hubCredPending = true;
+  renderAuthPanel();
+  try{
+    const res = await doFetch(`${sb.url}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`, {
+      method: 'POST',
+      headers: { apikey: sb.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail })
+    });
+    let body = {};
+    try{ body = await res.json(); }catch(e){ body = {}; }
+    hubCredPending = false;
+    if(res.status === 200){
+      hubAuthMode = 'reset-sent';
+      authNotice('Check your email for the password reset link. It brings you back here to choose a new password.');
+      return hubAuthMode;
+    }
+    authNotice(supabaseAuthError(body, 'The reset email could not be sent. Check the email address, then try again.'));
+    return hubAuthMode;
+  }catch(e){
+    hubCredPending = false;
+    setHubAuthState('backend-unreachable');
+    return hubAuthStateName;
+  }
+}
+/* Sign out: best-effort server logout with the token before it is
+   cleared, then every in-memory trace of the session is dropped and
+   the panel returns to the signed-out sign-in form. */
+async function signOutHub(fetchFn){
+  const token = hubSessionToken;
+  const sb = supabaseAuthConfig();
+  const doFetch = fetchFn || (typeof window !== 'undefined' ? window.fetch : null);
+  if(token && sb && doFetch){
+    try{
+      await doFetch(`${sb.url}/auth/v1/logout`, { method: 'POST', headers: { apikey: sb.key, Authorization: `Bearer ${token}` } });
+    }catch(e){ /* local sign-out proceeds; the token is dropped either way */ }
+  }
+  setHubSessionToken(null);
+  hubPendingCredential = null;
+  hubAuthMode = 'signin';
+  hubMemberships = [];
+  hubPickerEntries = [];
+  hubActiveTenant = null;
+  clearAuthPasswordFields();
+  setHubAuthState('signed-out');
+  authNotice('You are signed out.');
+  return hubAuthStateName;
+}
 function attemptHubSignIn(fetchFn){
   const cfg = authConfig();
   if(!cfg || !cfg.client_hub_api_base){ setHubAuthState('missing-config'); setStatus('Secure access is not configured yet.'); return Promise.resolve(hubAuthStateName); }
-  if(!hubSessionToken){ setHubAuthState('backend-unreachable'); setStatus('Secure access is not available yet. The Client Hub backend is not deployed.'); return Promise.resolve(hubAuthStateName); }
+  if(!hubSessionToken){ setHubAuthState('signed-out'); authNotice('Sign in with your email and password to continue.'); setStatus('Sign in with your email and password to continue.'); return Promise.resolve(hubAuthStateName); }
   return checkHubSession(fetchFn);
 }
 function createAuthPanel(){
@@ -444,6 +695,101 @@ function createAuthPanel(){
   title.textContent = 'Secure Access status';
   authStatusEl = document.createElement('p');
   authStatusEl.className = 'auth-status';
+  panel.appendChild(title);
+  panel.appendChild(authStatusEl);
+  const els = {};
+  /* Sign-in form. The values are read at submit and handed to
+     signInWithPassword or requestHubPasswordReset; the shell keeps no
+     copy of them beyond the input elements themselves. */
+  const signInWrap = document.createElement('div');
+  signInWrap.className = 'auth-form';
+  const emailLabel = document.createElement('label');
+  emailLabel.htmlFor = 'authEmail';
+  emailLabel.textContent = 'Email';
+  const emailInput = document.createElement('input');
+  emailInput.id = 'authEmail';
+  emailInput.className = 'auth-input';
+  emailInput.type = 'email';
+  emailInput.autocomplete = 'username';
+  const pwLabel = document.createElement('label');
+  pwLabel.htmlFor = 'authPassword';
+  pwLabel.textContent = 'Password';
+  const pwInput = document.createElement('input');
+  pwInput.id = 'authPassword';
+  pwInput.className = 'auth-input';
+  pwInput.type = 'password';
+  pwInput.autocomplete = 'current-password';
+  const signInBtn = document.createElement('button');
+  signInBtn.id = 'authSignInBtn';
+  signInBtn.type = 'button';
+  signInBtn.className = 'btn primary';
+  signInBtn.textContent = 'Sign in';
+  signInBtn.addEventListener('click', () => { signInWithPassword(emailInput.value || '', pwInput.value || ''); });
+  const forgotBtn = document.createElement('button');
+  forgotBtn.id = 'authForgotBtn';
+  forgotBtn.type = 'button';
+  forgotBtn.className = 'btn ghost';
+  forgotBtn.textContent = 'Forgot password';
+  forgotBtn.addEventListener('click', () => { requestHubPasswordReset(emailInput.value || ''); });
+  pwInput.addEventListener('keydown', (ev) => { if(ev.key === 'Enter'){ signInWithPassword(emailInput.value || '', pwInput.value || ''); } });
+  const signInActions = document.createElement('div');
+  signInActions.className = 'screen-actions';
+  signInActions.appendChild(signInBtn);
+  signInActions.appendChild(forgotBtn);
+  signInWrap.appendChild(emailLabel);
+  signInWrap.appendChild(emailInput);
+  signInWrap.appendChild(pwLabel);
+  signInWrap.appendChild(pwInput);
+  signInWrap.appendChild(signInActions);
+  panel.appendChild(signInWrap);
+  /* Set-password form, shown only after an invite or recovery
+     landing put a pending credential in memory. */
+  const setPwWrap = document.createElement('div');
+  setPwWrap.className = 'auth-form hidden';
+  const newPwLabel = document.createElement('label');
+  newPwLabel.htmlFor = 'authNewPassword';
+  newPwLabel.textContent = 'New password';
+  const newPwInput = document.createElement('input');
+  newPwInput.id = 'authNewPassword';
+  newPwInput.className = 'auth-input';
+  newPwInput.type = 'password';
+  newPwInput.autocomplete = 'new-password';
+  const confirmPwLabel = document.createElement('label');
+  confirmPwLabel.htmlFor = 'authConfirmPassword';
+  confirmPwLabel.textContent = 'Confirm new password';
+  const confirmPwInput = document.createElement('input');
+  confirmPwInput.id = 'authConfirmPassword';
+  confirmPwInput.className = 'auth-input';
+  confirmPwInput.type = 'password';
+  confirmPwInput.autocomplete = 'new-password';
+  const setPwBtn = document.createElement('button');
+  setPwBtn.id = 'authSetPasswordBtn';
+  setPwBtn.type = 'button';
+  setPwBtn.className = 'btn primary';
+  setPwBtn.textContent = 'Set password';
+  setPwBtn.addEventListener('click', () => { submitHubPasswordSet(newPwInput.value || '', confirmPwInput.value || ''); });
+  confirmPwInput.addEventListener('keydown', (ev) => { if(ev.key === 'Enter'){ submitHubPasswordSet(newPwInput.value || '', confirmPwInput.value || ''); } });
+  const setPwActions = document.createElement('div');
+  setPwActions.className = 'screen-actions';
+  setPwActions.appendChild(setPwBtn);
+  setPwWrap.appendChild(newPwLabel);
+  setPwWrap.appendChild(newPwInput);
+  setPwWrap.appendChild(confirmPwLabel);
+  setPwWrap.appendChild(confirmPwInput);
+  setPwWrap.appendChild(setPwActions);
+  panel.appendChild(setPwWrap);
+  /* Mode actions: the way back to the plain sign-in form from the
+     expired-link and reset-sent modes. */
+  const modeActions = document.createElement('div');
+  modeActions.className = 'screen-actions hidden';
+  const backBtn = document.createElement('button');
+  backBtn.id = 'authBackToSignInBtn';
+  backBtn.type = 'button';
+  backBtn.className = 'btn ghost';
+  backBtn.textContent = 'Back to sign in';
+  backBtn.addEventListener('click', () => { hubAuthMode = 'signin'; hubAuthNotice = null; renderAuthPanel(); });
+  modeActions.appendChild(backBtn);
+  panel.appendChild(modeActions);
   const actions = document.createElement('div');
   actions.className = 'screen-actions';
   const btn = document.createElement('button');
@@ -453,9 +799,26 @@ function createAuthPanel(){
   btn.textContent = 'Check secure access';
   btn.addEventListener('click', () => { attemptHubSignIn(); });
   actions.appendChild(btn);
-  panel.appendChild(title);
-  panel.appendChild(authStatusEl);
+  const signOutBtn = document.createElement('button');
+  signOutBtn.id = 'authSignOutBtn';
+  signOutBtn.type = 'button';
+  signOutBtn.className = 'btn ghost hidden';
+  signOutBtn.textContent = 'Sign out';
+  signOutBtn.addEventListener('click', () => { signOutHub(); });
+  actions.appendChild(signOutBtn);
   panel.appendChild(actions);
+  els.signInWrap = signInWrap;
+  els.setPwWrap = setPwWrap;
+  els.modeActions = modeActions;
+  els.signInBtn = signInBtn;
+  els.forgotBtn = forgotBtn;
+  els.setPwBtn = setPwBtn;
+  els.signOutBtn = signOutBtn;
+  els.emailInput = emailInput;
+  els.pwInput = pwInput;
+  els.newPwInput = newPwInput;
+  els.confirmPwInput = confirmPwInput;
+  authFormEls = els;
   return panel;
 }
 
@@ -585,8 +948,9 @@ async function submitConciergeInquiry(fetchFn, message, options){
 /* Follow-up release (2026-11-20, plan/FOLLOWUP-DESIGN.md): the
    Concierge pop-up chat box, the Help Desk purchase surface, and the
    concierge sessions record.
-   - The Concierge button (bow tie identifier, Hayden's Nov 20
-     directive superseding the DEC-0101 identifier) opens an overlay
+   - The Concierge button (chat bubble identifier, Hayden's Nov 23
+     directive superseding his Nov 20 bow tie directive, which had
+     superseded the DEC-0101 identifier) opens an overlay
      dialog. The chat inside it sends through the exact Phase 4
      inquiry contract above; the only addition is the optional
      chatSessionId that groups one popup conversation into one
@@ -1047,7 +1411,7 @@ function boot(){
   conciergeBtn.type = 'button';
   conciergeBtn.className = 'concierge-btn hidden';
   conciergeBtn.setAttribute('aria-label', 'Concierge: open the concierge chat');
-  conciergeBtn.innerHTML = '<span class="concierge-mark" aria-hidden="true">🎀</span><span>Concierge</span>';
+  conciergeBtn.innerHTML = '<span class="concierge-mark" aria-hidden="true">💬</span><span>Concierge</span>';
   conciergeBtn.addEventListener('click', openConcierge);
   document.body.appendChild(conciergeBtn);
   const conciergePopup = document.createElement('div');
@@ -1076,7 +1440,7 @@ function boot(){
   const menuScene = $('scene-menu');
   if(menuScene){ menuScene.appendChild(switchBrandBtn); }
   const accessHost = (document.querySelector && document.querySelector('.access-card')) || $('scene-access');
-  if(accessHost){ authPanelEl = createAuthPanel(); accessHost.appendChild(authPanelEl); renderAuthPanel(); }
+  if(accessHost){ authPanelEl = createAuthPanel(); accessHost.appendChild(authPanelEl); initAuthFromLocation(); renderAuthPanel(); if(hubAuthMode === 'set-password' && authFormEls){ focusEl(authFormEls.newPwInput); } }
   bindDynamicActions();
 }
 boot();
