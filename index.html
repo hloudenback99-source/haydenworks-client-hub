@@ -40,7 +40,7 @@
           <div class="screen-actions"><button type="button" class="btn primary" data-screen="opportunity_hq">Start with Opportunity HQ</button><button type="button" class="btn ghost" data-screen="handoff">Final Hand-Off</button></div>
         </div>
         <div id="navPanel" class="nav-panel" aria-label="Client Hub screens"></div>
-        <div class="footer-note"><span>Every major area opens as its own focused screen.</span><span>No production deployment or live auth is connected in this package.</span></div>
+        <div class="footer-note"><span>Every major area opens as its own focused screen.</span><span>Live sign-in is connected through Supabase Auth. The shell never stores your credentials.</span></div>
       </div>
     </section>
     <section id="scene-focus" class="scene scrollable">
@@ -496,7 +496,7 @@ window.CLIENT_HUB_CONFIG = {
     "supabase_publishable_key": "sb_publishable_PNEFTDNzwf0b5Waecour_w_GMhFV12t",
     "supabase_publishable_key_kind": "public client key, returned by the live ohq /api/config on 2026-11-19; public by design, not a secret",
     "tenant_slug": "cgf",
-    "token_handling": "Session tokens are held in page memory only, never in browser storage, never in Notion or Drive records, and never logged. This build collects no credentials and has no sign-in form.",
+    "token_handling": "Session tokens are held in page memory only, never in browser storage, never in Notion or Drive records, and never logged. Credentials are entered in the shell's Secure Access form and sent directly to Supabase Auth over HTTPS; the shell never stores them.",
     "shell_origin": "https://REPLACE-WITH-FINAL-SHELL-ORIGIN",
     "shell_origin_status": "PLACEHOLDER: the static host address is not final yet. Regenerate this package with SHELL_ORIGIN set to the real shell origin and set the client-hub function secret CORS_ALLOWED_ORIGINS to the same exact value before go-live.",
     "planned_shell_origin": "https://client.haydenworks.us",
