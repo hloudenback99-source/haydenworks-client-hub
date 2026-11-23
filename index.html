@@ -23,11 +23,7 @@
         <p class="kicker">Protected client workspace</p>
         <h1 class="title">Come Get Funded</h1>
         <p class="subtitle">A focused, screen-based GBrands Lite Client Hub for Regene Du Preez.</p>
-        <div class="grid2">
-          <div class="notice"><strong>Production access</strong><br>Cloudflare Access should protect the live route with an approved-email policy. The static shell does not store client credentials.</div>
-          <div class="notice"><strong>Native display rule</strong><br>Links and previews appear inside focused screens instead of stacking everything onto one overview page.</div>
-        </div>
-        <div class="screen-actions"><button id="enterBtn" type="button" class="btn primary">Enter Hub</button><button id="skipIntro" type="button" class="btn ghost">Skip intro</button><button id="securityBtn" type="button" class="btn ghost">Security rules</button></div>
+        <div class="screen-actions"><button id="enterBtn" type="button" class="btn primary">Enter Hub</button><button id="securityBtn" type="button" class="btn ghost">Security rules</button></div>
       </div>
     </section>
     <section id="scene-welcome" class="scene"><div><h1 class="hello">Welcome.</h1><p class="hello-sub">Opening the private Client Hub menu.</p></div></section>
@@ -66,7 +62,7 @@ window.CLIENT_HUB_STATE = {
     "client_slug": "come-get-funded",
     "deal_stage": "Launched",
     "service_package": "GBrandsLite",
-    "access_model": "Cloudflare Access approved email policy; do not store client credentials in shell"
+    "access_model": "Supabase Auth sign-in on the shared stack; the shell stores no credentials and holds session tokens in page memory only"
   },
   "current_state": {
     "phase": "HAND-OFF",
@@ -85,8 +81,6 @@ window.CLIENT_HUB_STATE = {
     ],
     "opportunity_hq_status": "Opportunity HQ [Lite] build active; core HQ shell, client opportunity board, internal opportunity vault, pipeline views, insights, and scanner-status controls exist.",
     "unresolved_external_release_items": [
-      "Cloudflare Pages preview URL",
-      "Cloudflare Access policy",
       "public website/view URL if different from Google Sites edit URL",
       "Help Desk scheduling link if not using direct support"
     ]
@@ -497,8 +491,8 @@ window.CLIENT_HUB_CONFIG = {
     "supabase_publishable_key_kind": "public client key, returned by the live ohq /api/config on 2026-11-19; public by design, not a secret",
     "tenant_slug": "cgf",
     "token_handling": "Session tokens are held in page memory only, never in browser storage, never in Notion or Drive records, and never logged. Credentials are entered in the shell's Secure Access form and sent directly to Supabase Auth over HTTPS; the shell never stores them.",
-    "shell_origin": "https://REPLACE-WITH-FINAL-SHELL-ORIGIN",
-    "shell_origin_status": "PLACEHOLDER: the static host address is not final yet. Regenerate this package with SHELL_ORIGIN set to the real shell origin and set the client-hub function secret CORS_ALLOWED_ORIGINS to the same exact value before go-live.",
+    "shell_origin": "https://client.haydenworks.us",
+    "shell_origin_status": "Set at package generation time. Must match the client-hub function secret CORS_ALLOWED_ORIGINS exactly, or the browser will block API calls from this shell.",
     "planned_shell_origin": "https://client.haydenworks.us",
     "planned_shell_origin_status": "Working name requested by Hayden 2026-11-20 (subdomain of haydenworks.us). Not live until the DNS and host steps in the deploy runbook complete."
   }
