@@ -202,7 +202,7 @@ function renderFocus(screen, origin){
     return setFocus('Access + Security', 'Controlled autonomy boundary', 'This screen preserves the credential and release boundaries before external client use.', `
       <div class="screen-grid">
         <article class="card"><h2>Do not store</h2>${checks(['Passwords','Launch credentials','API keys / Notion tokens / Drive service credentials','Banking details','OTPs or access codes'], true)}</article>
-        <article class="card"><h2>Release requirements</h2>${checks(['Deploy Cloudflare Pages preview','Configure Cloudflare Access approved email policy','Replace editable Google Sites link with public URL if appropriate','Confirm reusable Help Desk scheduling link','Run browser/device QA after deployment'], true)}</article>
+        <article class="card"><h2>Release requirements</h2>${checks(['Publish the shell to GitHub Pages at client.haydenworks.us','Sign in through Supabase Auth on the shared stack','Replace editable Google Sites link with public URL if appropriate','Confirm reusable Help Desk scheduling link','Run browser/device QA after deployment'], true)}</article>
       </div>`);
   }
   return setFocus('Screen not found', 'Unknown route', 'This screen key is not recognized in the current Client Hub configuration.', `
@@ -1403,7 +1403,6 @@ function boot(){
   setupHelloPhysics();
   let enterPending = false;
   $('enterBtn').addEventListener('click', () => { if(enterPending) return; enterPending = true; setStatus('Opening Client Hub menu.'); showScene('scene-welcome'); setTimeout(()=>{ showScene('scene-menu'); focusEl($('packageTitle')); enterPending = false; }, reduceMotion ? 0 : 750); });
-  $('skipIntro').addEventListener('click', () => { setStatus('Intro skipped.'); showScene('scene-menu'); focusEl($('packageTitle')); });
   $('backToMenu').addEventListener('click', () => { setStatus('Returning to previous Client Hub screen.'); showScene(focusOrigin || 'scene-menu'); focusEl($('packageTitle')); });
   $('securityBtn').addEventListener('click', () => renderFocus('security', activeSceneId()));
   const conciergeBtn = document.createElement('button');
