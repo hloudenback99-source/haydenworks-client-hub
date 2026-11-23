@@ -88,6 +88,94 @@ function embedCard(e){
   if(!preview){ return `<article class="embed-card"><div class="route-banner"><div><p class="kicker">Native Preview</p><h3>${esc(e.label)}</h3></div>${miniLink('Open Source', e.fallback_url)}</div><button class="link-card missing" type="button" data-action-message="${esc(e.label)} preview" data-config-needed="${esc(e.label)} preview URL"><div><strong>Preview unavailable</strong><span>Configuration needed</span></div><b>Needs config</b></button></article>`; }
   return `<article class="embed-card"><div class="route-banner"><div><p class="kicker">Native Preview</p><h3>${esc(e.label)}</h3></div>${miniLink('Open Source', e.fallback_url)}</div><div class="embed-wrap"><iframe src="${esc(preview)}" title="${esc(e.label)}" loading="lazy"></iframe></div></article>`;
 }
+/* Phase tabs (Hayden, 2026-11-23): phase tab columns flank the
+   dashboard's button region (left column anchored at the top of the
+   dashboard, right column offset below it; build.py wraps navPanel
+   in the phase-dash structure). Selecting a phase shows what to
+   expect at that stage in the panel above the buttons and filters
+   the navigation buttons to that phase's screens. The definitions
+   live here in the shell; the only tenant-state inputs are
+   current_state.phase (the default selection) and, for the client's
+   own current phase, their status_label and client_message. The
+   selection is page memory only: nothing is stored anywhere, and
+   re-entering the hub re-derives the default from state. The
+   welcome/current-state card above the buttons is not a navigation
+   button and stays visible in every view; the floating Concierge
+   button is likewise untouched. */
+const HUB_PHASES = [
+  { key: 'all', label: 'All', side: 'left', screens: null, expect: 'Every part of your hub in one view. Choose a phase tab to see what happens at that stage, with only its screens below.' },
+  { key: 'onboarding', label: 'Onboarding', side: 'left', screens: ['documents'], expect: 'We collect your logins, brand materials, and goals, and set up your private workspace.' },
+  { key: 'brand', label: 'Brand', side: 'left', screens: ['brand_assets', 'brand_concepts'], expect: 'Your logo, colors, and concepts are created and refined here until they are unmistakably yours.' },
+  { key: 'website', label: 'Website', side: 'left', screens: ['website'], expect: 'Your site is designed and built, then sent to you for review before anything goes live.' },
+  { key: 'launch', label: 'Launch', side: 'right', screens: ['handoff', 'security'], expect: 'Final checks, hand-off of your finished assets, and your secure access confirmed.' },
+  { key: 'growth', label: 'Growth', side: 'right', screens: ['opportunity_hq', 'opportunity_board'], expect: 'Your OpportunityHQ board: live demand in your market, qualified and routed to you.' },
+  { key: 'support', label: 'Support', side: 'right', screens: ['helpdesk'], expect: 'Book Help Desk time and get a person, with your credits and sessions tracked here.' },
+];
+let hubPhase = null;
+function hubPhaseByKey(key){ return HUB_PHASES.find(p => p.key === key) || HUB_PHASES[0]; }
+function getHubPhase(){ return hubPhase || defaultHubPhase(); }
+/* The served state spells phases in the app's own vocabulary:
+   ONBOARDING in the starter template, and the progress rail's
+   BRANDING, WEB DEV, and HAND-OFF spellings in built packages.
+   Match case-insensitively and map those spellings onto the tab
+   keys; anything missing or unrecognized defaults to All. */
+function defaultHubPhase(){
+  const raw = String((DATA.current_state && DATA.current_state.phase) || '').trim().toUpperCase();
+  const aliases = { 'ALL': 'all', 'ONBOARDING': 'onboarding', 'BRAND': 'brand', 'BRANDING': 'brand', 'WEBSITE': 'website', 'WEB DEV': 'website', 'WEBDEV': 'website', 'WEB DEVELOPMENT': 'website', 'LAUNCH': 'launch', 'HAND-OFF': 'launch', 'HANDOFF': 'launch', 'HAND OFF': 'launch', 'GROWTH': 'growth', 'SUPPORT': 'support' };
+  return aliases[raw] || 'all';
+}
+function isCurrentHubPhase(phase){
+  return phase.key !== 'all' && phase.key === defaultHubPhase();
+}
+/* The expectations panel: the phase's generic line, plus the
+   client's own status from state when the selected phase is the
+   one they are in. Another phase never shows a status: the shell
+   has none for it and does not invent one. */
+function phaseExpectHtml(phase){
+  let status = '';
+  if(isCurrentHubPhase(phase)){
+    const cs = DATA.current_state || {};
+    const bits = [];
+    if(cs.status_label) bits.push(`<p class="phase-expect-status"><strong>Where you are:</strong> ${esc(cs.status_label)}</p>`);
+    if(cs.client_message) bits.push(`<p>${esc(cs.client_message)}</p>`);
+    status = bits.join('');
+  }
+  const kicker = phase.key === 'all' ? 'All phases' : `${esc(phase.label)} phase`;
+  const title = phase.key === 'all' ? 'Everything in your hub' : `What to expect: ${esc(phase.label)}`;
+  return `<p class="kicker">${kicker}</p><h2 class="phase-expect-title">${title}</h2><p>${esc(phase.expect)}</p>${status}`;
+}
+function phaseTabHtml(phase){
+  const selected = phase.key === getHubPhase();
+  return `<button type="button" class="phase-tab ${selected ? 'selected' : ''}" data-phase-tab="${esc(phase.key)}" aria-pressed="${selected ? 'true' : 'false'}">${esc(phase.label)}</button>`;
+}
+function renderPhaseTabs(){
+  const left = $('phaseTabsLeft'), right = $('phaseTabsRight'), panel = $('phaseExpect');
+  if(left) left.innerHTML = HUB_PHASES.filter(p => p.side === 'left').map(phaseTabHtml).join('');
+  if(right) right.innerHTML = HUB_PHASES.filter(p => p.side === 'right').map(phaseTabHtml).join('');
+  if(panel) panel.innerHTML = phaseExpectHtml(hubPhaseByKey(getHubPhase()));
+  document.querySelectorAll('[data-phase-tab]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => { const key = btn.dataset.phaseTab; selectHubPhase(key); focusEl(document.querySelector ? document.querySelector(`[data-phase-tab="${key}"]`) : null); }); });
+}
+function bindScreenButtons(){
+  document.querySelectorAll('[data-screen]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => renderFocus(btn.dataset.screen, activeSceneId())); });
+}
+function renderNav(){
+  const panel = $('navPanel');
+  if(!panel) return;
+  const phase = hubPhaseByKey(getHubPhase());
+  const items = (DATA.navigation || []).filter(n => !phase.screens || phase.screens.includes(n.screen));
+  panel.innerHTML = items.map(n => `<button type="button" class="nav-card" data-screen="${esc(n.screen)}"><strong>${esc(n.label)} <span aria-hidden="true">→</span></strong><span>${esc(n.description)}</span></button>`).join('');
+  bindScreenButtons();
+}
+/* Selecting a phase re-renders the tabs (pressed states), the
+   expectations panel, and the filtered buttons. Focus discipline:
+   the click path re-focuses the freshly rendered tab with the same
+   key, so focus never rests on a replaced or hidden element. */
+function selectHubPhase(key){
+  hubPhase = hubPhaseByKey(key).key;
+  renderPhaseTabs();
+  renderNav();
+  return hubPhase;
+}
 function renderBase(){
   $('clientName').textContent = DATA.client.client_name;
   $('ownerName').textContent = DATA.client.owner_name;
@@ -99,8 +187,9 @@ function renderBase(){
   $('progressBar').style.width = `${DATA.current_state.overall_progress}%`;
   $('progressBar').setAttribute('aria-valuenow', String(DATA.current_state.overall_progress));
   $('phaseRail').innerHTML = phases.map(p => `<div class="phase-chip ${p === DATA.current_state.phase ? 'current' : phases.indexOf(p) < phases.indexOf(DATA.current_state.phase) ? 'done' : ''}">${esc(p)}</div>`).join('');
-  $('navPanel').innerHTML = DATA.navigation.map(n => `<button type="button" class="nav-card" data-screen="${esc(n.screen)}"><strong>${esc(n.label)} <span aria-hidden="true">→</span></strong><span>${esc(n.description)}</span></button>`).join('');
-  document.querySelectorAll('[data-screen]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => renderFocus(btn.dataset.screen, activeSceneId())); });
+  if(hubPhase === null) hubPhase = defaultHubPhase();
+  renderPhaseTabs();
+  renderNav();
 }
 function bindDynamicActions(){
   document.querySelectorAll('[data-action-message]').forEach(btn => { if(btn.dataset.hubBound) return; btn.dataset.hubBound = '1'; btn.addEventListener('click', () => actionMessage(btn.dataset.actionMessage || 'This action', btn.dataset.configNeeded || '')); });
@@ -790,15 +879,13 @@ function createAuthPanel(){
   backBtn.addEventListener('click', () => { hubAuthMode = 'signin'; hubAuthNotice = null; renderAuthPanel(); });
   modeActions.appendChild(backBtn);
   panel.appendChild(modeActions);
+  /* Hayden, 2026-11-23: the manual secure-access check button is
+     removed entirely. It was a Phase 3 leftover; the check runs
+     automatically after every sign-in and password set through
+     attemptHubSignIn / checkHubSession, so the actions row carries
+     only Sign out. */
   const actions = document.createElement('div');
   actions.className = 'screen-actions';
-  const btn = document.createElement('button');
-  btn.id = 'authCheckBtn';
-  btn.type = 'button';
-  btn.className = 'btn ghost';
-  btn.textContent = 'Check secure access';
-  btn.addEventListener('click', () => { attemptHubSignIn(); });
-  actions.appendChild(btn);
   const signOutBtn = document.createElement('button');
   signOutBtn.id = 'authSignOutBtn';
   signOutBtn.type = 'button';
