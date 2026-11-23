@@ -89,3 +89,20 @@ button,a{font:inherit}:focus-visible{outline:2px solid var(--cyan);outline-offse
 .picker-role{color:var(--muted);font-size:12px;margin-left:auto}
 .picker-badge{border:1px solid rgba(116,227,160,.38);background:rgba(116,227,160,.12);color:#dbffe9;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:800}
 #switchBrandBtn{position:absolute;left:22px;bottom:calc(20px + var(--safe-bottom));z-index:60}
+
+/* Phase tabs (2026-11-23): flanking phase tab columns around the dashboard buttons, expectations panel above the buttons. The left column anchors at the top of the dashboard; the right column starts lower, staggered rather than mirrored. On narrow screens the columns collapse into stacked tab rows above the buttons. */
+.phase-dash{display:grid;grid-template-columns:86px minmax(0,1fr) 86px;gap:10px;align-items:start}
+.phase-tabs{display:grid;gap:8px;align-content:start}
+.phase-tabs-right{margin-top:54px}
+.phase-tab{appearance:none;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.045);color:var(--muted);padding:10px 6px;font:inherit;font-weight:800;font-size:12.5px;letter-spacing:.02em;cursor:pointer;min-height:44px;transition:.2s ease}
+.phase-tab:hover{transform:translateY(-2px);border-color:rgba(54,204,255,.48);color:var(--text)}
+.phase-tab.selected{color:#fff;border-color:rgba(54,204,255,.55);background:rgba(54,204,255,.13)}
+.phase-center{display:grid;gap:10px;align-content:start;min-width:0}
+.phase-expect{border:1px solid rgba(54,204,255,.23);background:rgba(54,204,255,.06);border-radius:22px;padding:16px}
+.phase-expect .kicker{margin-bottom:6px;color:var(--cyan);font-size:12px}
+.phase-expect-title{font-size:19px;letter-spacing:-.03em;margin:0 0 8px}
+.phase-expect p{margin:0;color:var(--muted);line-height:1.55;font-size:13.5px}
+.phase-expect p + p{margin-top:8px}
+.phase-expect .phase-expect-status{margin-top:10px;color:var(--text)}
+.phase-expect .phase-expect-status strong{color:#f2fbff}
+@media(max-width:980px){.phase-dash{display:flex;flex-direction:column}.phase-tabs{display:flex;flex-wrap:wrap;gap:8px}.phase-tabs-left{order:1}.phase-tabs-right{order:2;margin-top:0}.phase-center{order:3}.phase-tab{flex:1 1 30%}}
