@@ -35,7 +35,14 @@
           <div class="progress"><div id="progressBar" class="bar" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div><div id="phaseRail" class="phase-rail"></div>
           <div class="screen-actions"><button type="button" class="btn primary" data-screen="opportunity_hq">Start with Opportunity HQ</button><button type="button" class="btn ghost" data-screen="handoff">Final Hand-Off</button></div>
         </div>
-        <div id="navPanel" class="nav-panel" aria-label="Client Hub screens"></div>
+        <div class="phase-dash">
+          <div class="phase-tabs phase-tabs-left" id="phaseTabsLeft" role="group" aria-label="Project phases: getting started"></div>
+          <div class="phase-center">
+            <section class="phase-expect" id="phaseExpect" aria-label="What to expect in the selected phase"></section>
+            <div id="navPanel" class="nav-panel" aria-label="Client Hub screens"></div>
+          </div>
+          <div class="phase-tabs phase-tabs-right" id="phaseTabsRight" role="group" aria-label="Project phases: launch and beyond"></div>
+        </div>
         <div class="footer-note"><span>Every major area opens as its own focused screen.</span><span>Live sign-in is connected through Supabase Auth. The shell never stores your credentials.</span></div>
       </div>
     </section>
