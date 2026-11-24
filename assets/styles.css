@@ -109,3 +109,10 @@ button,a{font:inherit}:focus-visible{outline:2px solid var(--cyan);outline-offse
 
 /* Client Status span (2026-11-23): the Client Status card spans the entire top of the hub dashboard, full width, with every other panel below it. The menu layout becomes a single column: the status card takes the full width at the top, the phase dashboard sits below it at full width (its inner 86px / 1fr / 86px tab-flank grid is untouched, it simply gets the full width now), and the footer note remains below everything. The narrow-screen media query already stacked these in the same DOM order, so responsive structure is unchanged. */
 .menu-layout{grid-template-columns:minmax(0,1fr)}
+
+/* Status fixed + Phases label (2026-11-23): the Client Status card is not resizable. It always takes its full content height and is never shrunk, compressed, clipped, or scrolled internally, whatever the window size and whatever the panels below do (the expectations panel changes height on phase switches). The menu layout gets explicit content-sized rows packed at the top, so spare or missing height in the scene lands outside the tracks instead of stretching or squeezing them; the card itself refuses to flex-shrink, keeps a max-content minimum height, and drops the base overflow clip. The card's content, padding, and inner layout are untouched. The phase dashboard also gains a "Phases" label above the phase buttons: a kicker-styled heading spanning all three columns as the first grid row, centered; the inner 86px / 1fr / 86px columns and the right column's 54px stagger are untouched. On the stacked narrow layout the label leads, before the left tab row; the existing order after it is unchanged. */
+.menu-layout{grid-template-rows:auto auto auto;align-content:start}
+.menu-card{flex-shrink:0;min-height:max-content;overflow:visible}
+.phase-dash{grid-template-rows:auto auto}
+.phase-label{grid-column:1/-1;text-align:center}
+@media(max-width:980px){.phase-label{order:0}}
