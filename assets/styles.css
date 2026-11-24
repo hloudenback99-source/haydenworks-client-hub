@@ -106,3 +106,6 @@ button,a{font:inherit}:focus-visible{outline:2px solid var(--cyan);outline-offse
 .phase-expect .phase-expect-status{margin-top:10px;color:var(--text)}
 .phase-expect .phase-expect-status strong{color:#f2fbff}
 @media(max-width:980px){.phase-dash{display:flex;flex-direction:column}.phase-tabs{display:flex;flex-wrap:wrap;gap:8px}.phase-tabs-left{order:1}.phase-tabs-right{order:2;margin-top:0}.phase-center{order:3}.phase-tab{flex:1 1 30%}}
+
+/* Client Status span (2026-11-23): the Client Status card spans the entire top of the hub dashboard, full width, with every other panel below it. The menu layout becomes a single column: the status card takes the full width at the top, the phase dashboard sits below it at full width (its inner 86px / 1fr / 86px tab-flank grid is untouched, it simply gets the full width now), and the footer note remains below everything. The narrow-screen media query already stacked these in the same DOM order, so responsive structure is unchanged. */
+.menu-layout{grid-template-columns:minmax(0,1fr)}
