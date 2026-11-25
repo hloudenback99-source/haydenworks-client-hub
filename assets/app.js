@@ -7,7 +7,16 @@
    config-needed detail in missing-action messaging. ZIP data files supply
    the v1.2.2 state and rules. Hello physics, timing, and presentation are
    the canonical implementation, unchanged. See evidence/phase1-diff-inventory.md. */
-const DATA = window.CLIENT_HUB_STATE;
+/* De-brand route 1 (Hayden, 2026-11-25): the shell embeds only the
+   neutral placeholder state (window.CLIENT_HUB_STATE, from
+   src/data/client-state.placeholder.json). It names no client and
+   renders until a signed-in client's own workspace loads from
+   GET /api/hub/state and replaces it in page memory. DATA is
+   therefore replaceable render state, not a constant; a loaded
+   tenant state is held only for the tenant it was fetched for, and
+   signing out restores the placeholder. */
+let DATA = window.CLIENT_HUB_STATE;
+const SHELL_PLACEHOLDER_STATE = window.CLIENT_HUB_STATE;
 const CONFIG = window.CLIENT_HUB_CONFIG || {};
 const RULES = window.CLIENT_HUB_RULES;
 const $ = (id) => document.getElementById(id);
@@ -213,14 +222,15 @@ function setFocus(title, kicker, subtitle, body){
 }
 function renderFocus(screen, origin){
   focusOrigin = origin && origin !== 'scene-focus' ? origin : 'scene-menu';
+  hubFocusScreen = screen;
   const L = DATA.links, N = DATA.native_display, S = DATA.source_summary;
   const unresolved = S.unresolved_external_release_items || [];
   if(screen === 'opportunity_hq'){
-    return setFocus('Opportunity HQ', 'Come Get Funded HQ', 'Native summary first. Full Notion workspace opens only when needed.', `
+    return setFocus('Opportunity HQ', `${DATA.client.client_name} HQ`, 'Native summary first. Full Notion workspace opens only when needed.', `
       <div class="screen-grid">
         <article class="card"><h2>HQ status</h2><p>${esc(S.opportunity_hq_status)}</p><div class="pills">${S.provider_pathways.map(p=>`<span class="pill">${esc(p)}</span>`).join('')}</div></article>
         <article class="card"><h2>HQ navigation</h2><div class="link-list">
-          ${linkCard('CGF Opportunity HQ [Lite]','Main client-facing HQ workspace',L.opportunity_hq_lite)}
+          ${linkCard('Opportunity HQ [Lite]','Main client-facing HQ workspace',L.opportunity_hq_lite)}
           ${linkCard('Opportunity Dashboard','Open the dashboard page',L.opportunity_dashboard)}
           ${linkCard('Insights','Open insights page',L.insights)}
           ${linkCard('Provider & Funding Insights','Open provider pathway insights',L.provider_funding_insights)}
@@ -235,18 +245,18 @@ function renderFocus(screen, origin){
   }
   if(screen === 'brand_assets'){
     return setFocus('Brand Assets', 'Drive-backed asset bank', 'Logo, banner, and icon files are displayed natively from Drive thumbnails.', `
-      <div class="route-banner"><p>Finalized Come Get Funded brand assets.</p>${miniLink('Open Assets Folder', L.assets_folder)}</div>
+      <div class="route-banner"><p>Finalized brand assets for this workspace.</p>${miniLink('Open Assets Folder', L.assets_folder)}</div>
       ${gallery(N.brand_assets)}`);
   }
   if(screen === 'brand_concepts'){
-    return setFocus('Brand Concepts', 'Concept review archive', 'Current CGF concept images stay in their own focused review screen.', `
-      <div class="route-banner"><p>Concept previews from the ComeGetFunded concepts folder.</p>${miniLink('Open Concepts Folder', L.concepts_folder)}</div>
+    return setFocus('Brand Concepts', 'Concept review archive', 'Current concept images stay in their own focused review screen.', `
+      <div class="route-banner"><p>Concept previews from the concepts folder.</p>${miniLink('Open Concepts Folder', L.concepts_folder)}</div>
       ${gallery(N.concept_assets)}`);
   }
   if(screen === 'website'){
-    return setFocus('Website Build', 'Google Sites asset', 'The published Come Get Funded website is connected from the verified Hub configuration. The editable Google Sites build stays internal.', `
+    return setFocus('Website Build', 'Google Sites asset', 'The published website is connected from the verified Hub configuration. The editable Google Sites build stays internal.', `
       <div class="screen-grid">
-        <article class="card"><h2>Published website</h2><p>The public published URL was confirmed by Hayden on 2026-11-18 and is carried in the Hub configuration.</p><div class="link-list">${linkCard('Open Published Website','Come Get Funded public site',CONFIG.client_website_url)}${linkCard('Open Google Sites Build','Editable Google Sites asset, internal only',L.site_edit)}</div></article>
+        <article class="card"><h2>Published website</h2><p>The public published URL was confirmed by Hayden on 2026-11-18 and is carried in the Hub configuration.</p><div class="link-list">${linkCard('Open Published Website','Public site',CONFIG.client_website_url)}${linkCard('Open Google Sites Build','Editable Google Sites asset, internal only',L.site_edit)}</div></article>
         <article class="card"><h2>Before external release</h2>${checks(['Published URL confirmed in Hub configuration','Confirm client access expectations','Keep edit/admin access internal unless intentionally shared'], true)}</article>
       </div>`);
   }
@@ -278,12 +288,12 @@ function renderFocus(screen, origin){
   if(screen === 'handoff'){
     return setFocus('Final Hand-Off', 'Release checklist', 'Hand-off is shown as its own screen so the client can orient without seeing sensitive launch credentials.', `
       <div class="screen-grid">
-        <article class="card"><h2>Ready for client orientation</h2>${checks(['Come Get Funded launched status reflected','Provider pathways summarized','Opportunity HQ connected','Drive-backed asset bank connected','PDF previews connected','Website build asset connected'])}</article>
+        <article class="card"><h2>Ready for client orientation</h2>${checks(['Launched status reflected','Provider pathways summarized','Opportunity HQ connected','Drive-backed asset bank connected','PDF previews connected','Website build asset connected'])}</article>
         <article class="card"><h2>Release gates still open</h2>${checks(unresolved.concat(['Secure credential handoff remains intentionally excluded until approved']), true)}</article>
       </div>
       <div class="screen-grid three" style="margin-top:16px">
-        <article class="card"><h3>Core records</h3><div class="link-list">${linkCard('Regene Notion Page','Source client/sales record',L.regene_notion_page)}${linkCard('Internal Control','Internal CGF control page',L.internal_control)}</div></article>
-        <article class="card"><h3>Client files</h3><div class="link-list">${linkCard('Regene Drive Folder','Client folder',L.client_drive_folder)}${linkCard('Assets Folder','Brand files',L.assets_folder)}</div></article>
+        <article class="card"><h3>Core records</h3><div class="link-list">${linkCard('Client Notion Page','Source client/sales record',L.regene_notion_page)}${linkCard('Internal Control','Internal control page',L.internal_control)}</div></article>
+        <article class="card"><h3>Client files</h3><div class="link-list">${linkCard('Client Drive Folder','Client folder',L.client_drive_folder)}${linkCard('Assets Folder','Brand files',L.assets_folder)}</div></article>
         <article class="card"><h3>HQ</h3><div class="link-list">${linkCard('Opportunity HQ','Client HQ',L.opportunity_hq_lite)}${linkCard('Opportunity Board','Live board',L.opportunity_board)}</div></article>
       </div>`);
   }
@@ -353,7 +363,7 @@ const AUTH_STATE_MESSAGES = {
   'pending': 'Checking secure access.',
   'signed-in': 'Signed in.',
   'picker': 'Signed in. Choose your brand to continue.',
-  'denied': 'This account does not have access to the Come Get Funded Client Hub. This Hub is limited to its own client tenant.',
+  'denied': 'This account is not connected to a client workspace yet. If that looks wrong, contact HaydenWorks.',
   'expired': 'Your session has expired. Sign in again to continue.',
   'tampered': 'The session token was rejected as invalid. It may have been altered, or issued for a different service.',
   'backend-unreachable': 'The secure access service could not be reached. Check your connection, then try again.',
@@ -386,7 +396,7 @@ function renderAuthPanel(){
   if(hubAuthStateName === 'signed-in' && hubAuthIdentity){
     const roles = (hubAuthIdentity.tenants || []).map(t => t.role).filter(Boolean).join(', ');
     const activeEntry = hubPickerEntries.find(e => e.tenant === hubActiveTenant) || null;
-    const accessLabel = activeEntry ? (activeEntry.name || activeEntry.tenant) : 'Come Get Funded';
+    const accessLabel = activeEntry ? (activeEntry.name || activeEntry.tenant) : 'Client Hub';
     message = `Signed in as ${hubAuthIdentity.email || 'verified account'}. Tenant access: ${accessLabel}. Roles: ${roles || 'member'}.`;
   }
   if(hubAuthNotice) message = hubAuthNotice;
@@ -399,6 +409,10 @@ function renderAuthPanel(){
     authFormEls.setPwWrap.classList.toggle('hidden', hubAuthMode !== 'set-password');
     authFormEls.modeActions.classList.toggle('hidden', !(hubAuthMode === 'reset-sent' || hubAuthMode === 'link-expired'));
     authFormEls.signOutBtn.classList.toggle('hidden', !(hubAuthStateName === 'signed-in' || hubAuthStateName === 'picker'));
+    if(authFormEls.stateRetryBtn){
+      authFormEls.stateRetryBtn.classList.toggle('hidden', !(hubStateLoadStatus === 'error' && hubActiveTenant));
+      authFormEls.stateRetryBtn.disabled = hubStateLoadStatus === 'loading';
+    }
     authFormEls.signInBtn.disabled = busy;
     authFormEls.forgotBtn.disabled = busy;
     authFormEls.setPwBtn.disabled = busy;
@@ -474,6 +488,7 @@ async function checkHubSession(fetchFn){
       else if(hubPickerEntries.length === 1){
         hubActiveTenant = hubPickerEntries[0].tenant;
         setHubAuthState('signed-in', { email: body.email || '', tenants });
+        await loadHubState(hubActiveTenant, doFetch);
       } else {
         hubActiveTenant = null;
         setHubAuthState('picker', { email: body.email || '', tenants });
@@ -544,6 +559,7 @@ function pickerEntriesHtml(){
    into a hub: no tenant is open until an entry is chosen. */
 function renderTenantPicker(){
   focusOrigin = 'scene-access';
+  hubFocusScreen = null;
   return setFocus('Choose your brand', 'Your HaydenWorks brands and projects', 'Pick the brand or project you want to open. Nothing from a brand loads until you choose it.', `<div class="picker-list">${pickerEntriesHtml()}</div>`);
 }
 /* Switch path: re-open the picker with refreshed badges. The session
@@ -553,19 +569,23 @@ async function showTenantPicker(fetchFn){
   renderTenantPicker();
   return hubPickerEntries;
 }
-/* Entering a tenant: set the active tenant, record the last-opened
-   marker through the Phase 4 write contract (which clears the badge
-   server-side for the next visit), clear the badge locally, and open
-   the menu. A failed marker write never blocks entry; the badge
-   simply reappears next time rather than the user being locked out
-   of their own hub over a bookkeeping write. */
+/* Entering a tenant: record the last-opened marker through the
+   Phase 4 write contract (which clears the badge server-side for
+   the next visit), then load the tenant's own workspace state
+   (loadHubState) and only then commit the tenant, clear the badge
+   locally, and open the menu. A failed marker write never blocks
+   entry; the badge simply reappears next time rather than the user
+   being locked out of their own hub over a bookkeeping write. A
+   failed state load DOES block entry: the active tenant is left
+   unchanged, so the shell never renders one tenant's state under
+   another tenant's session, and the picker stays up so the same
+   tap retries the load. */
 async function selectPickerTenant(slug, fetchFn){
   const entry = hubPickerEntries.find(e => e.tenant === slug) || null;
   if(!entry) return null;
-  hubActiveTenant = slug;
+  const doFetch = fetchFn || (typeof window !== 'undefined' ? window.fetch : null);
   if(hubSessionToken){
     const cfg = authConfig();
-    const doFetch = fetchFn || (typeof window !== 'undefined' ? window.fetch : null);
     if(cfg && cfg.client_hub_api_base && doFetch){
       try{
         await doFetch(`${cfg.client_hub_api_base}/api/hub/writes`, {
@@ -576,12 +596,76 @@ async function selectPickerTenant(slug, fetchFn){
       }catch(e){ /* entry proceeds; see the note above */ }
     }
   }
+  const loaded = await loadHubState(slug, doFetch);
+  if(!loaded) return null;
+  hubActiveTenant = slug;
   entry.badge = 0;
   setHubAuthState('signed-in', hubAuthIdentity);
   setStatus(`Opening ${entry.name || slug}.`);
   showScene('scene-menu');
   focusEl($('packageTitle'));
   return entry;
+}
+/* Live workspace loading (de-brand route 1, Hayden 2026-11-25):
+   after authentication resolves a tenant, the shell fetches that
+   tenant's own state from GET /api/hub/state (the Phase 3 contract:
+   ?tenant=<slug>, Bearer token, 200 { tenant, state }) and renders
+   it in place of the placeholder. The response is accepted only
+   when its tenant matches the requested slug, so a state can never
+   be rendered under another tenant's session. On any failure the
+   shell keeps whatever it already renders (the placeholder, or the
+   previously loaded tenant's own state during a switch attempt),
+   records the error for the Secure Access panel's Try again
+   control, and shows a neutral message: no client data is ever
+   fabricated or borrowed. */
+let hubStateLoadStatus = 'idle';
+let hubStateTenant = null;
+let hubFocusScreen = null;
+function getHubState(){ return DATA; }
+function getHubStateLoadStatus(){ return hubStateLoadStatus; }
+function getHubStateTenant(){ return hubStateTenant; }
+/* Replace the render state and re-render everything derived from
+   it: the dashboard card, phase tabs, and nav (renderBase, which
+   also re-derives the default phase selection), plus the focused
+   screen when one is open. */
+function applyHubState(state){
+  DATA = state;
+  hubPhase = null;
+  renderBase();
+  if(activeSceneId() === 'scene-focus' && hubFocusScreen){ renderFocus(hubFocusScreen, focusOrigin); }
+}
+async function loadHubState(slug, fetchFn){
+  const tenant = slug || hubActiveTenant;
+  if(!tenant || !hubSessionToken) return null;
+  const cfg = authConfig();
+  const doFetch = fetchFn || (typeof window !== 'undefined' ? window.fetch : null);
+  if(!cfg || !cfg.client_hub_api_base || !doFetch){ hubStateLoadStatus = 'error'; return null; }
+  hubStateLoadStatus = 'loading';
+  renderAuthPanel();
+  setStatus('Loading your workspace.');
+  try{
+    const res = await doFetch(`${cfg.client_hub_api_base}/api/hub/state?tenant=${encodeURIComponent(tenant)}`, { headers: { Authorization: `Bearer ${hubSessionToken}` } });
+    let body = {};
+    try{ body = await res.json(); }catch(e){ body = {}; }
+    if(res.status !== 200 || !body || body.tenant !== tenant || !body.state || typeof body.state !== 'object'){
+      throw new Error('hub state unavailable');
+    }
+    hubStateTenant = tenant;
+    hubStateLoadStatus = 'loaded';
+    if(hubAuthNotice){ hubAuthNotice = null; }
+    applyHubState(body.state);
+    renderAuthPanel();
+    return DATA;
+  }catch(e){
+    hubStateLoadStatus = 'error';
+    setStatus('Your workspace could not be loaded. Check your connection, then try again.');
+    authNotice('You are signed in, but your workspace could not be loaded. Nothing from another account is shown. Use Try again to reload your workspace.');
+    return null;
+  }
+}
+function retryHubStateLoad(fetchFn){
+  if(!hubActiveTenant) return Promise.resolve(null);
+  return loadHubState(hubActiveTenant, fetchFn);
 }
 /* Auth surface flows. Each accepts an optional fetch implementation,
    following the checkHubSession convention, so the harnesses can drive
@@ -764,6 +848,15 @@ async function signOutHub(fetchFn){
   hubMemberships = [];
   hubPickerEntries = [];
   hubActiveTenant = null;
+  /* The loaded workspace leaves with the session: the render state
+     returns to the neutral placeholder, so a signed-out shell shows
+     no client's data. */
+  hubStateTenant = null;
+  hubStateLoadStatus = 'idle';
+  hubPhase = null;
+  hubFocusScreen = null;
+  DATA = SHELL_PLACEHOLDER_STATE;
+  renderBase();
   clearAuthPasswordFields();
   setHubAuthState('signed-out');
   authNotice('You are signed out.');
@@ -893,6 +986,15 @@ function createAuthPanel(){
   signOutBtn.textContent = 'Sign out';
   signOutBtn.addEventListener('click', () => { signOutHub(); });
   actions.appendChild(signOutBtn);
+  /* Workspace load retry (de-brand route 1): visible only while a
+     signed-in tenant's state load sits in its error state. */
+  const stateRetryBtn = document.createElement('button');
+  stateRetryBtn.id = 'authStateRetryBtn';
+  stateRetryBtn.type = 'button';
+  stateRetryBtn.className = 'btn ghost hidden';
+  stateRetryBtn.textContent = 'Try again';
+  stateRetryBtn.addEventListener('click', () => { retryHubStateLoad(); });
+  actions.appendChild(stateRetryBtn);
   panel.appendChild(actions);
   els.signInWrap = signInWrap;
   els.setPwWrap = setPwWrap;
@@ -901,6 +1003,7 @@ function createAuthPanel(){
   els.forgotBtn = forgotBtn;
   els.setPwBtn = setPwBtn;
   els.signOutBtn = signOutBtn;
+  els.stateRetryBtn = stateRetryBtn;
   els.emailInput = emailInput;
   els.pwInput = pwInput;
   els.newPwInput = newPwInput;
