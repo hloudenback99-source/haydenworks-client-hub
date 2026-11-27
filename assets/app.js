@@ -350,9 +350,12 @@ let hubCredPending = false;
 let authFormEls = null;
 /* Picker release (plan/PICKER-DESIGN.md): the served memberships the
    picker offers, and the tenant the user has opened. The active
-   tenant stays null until a single-membership sign-in resolves it or
-   the user picks an entry: no tenant-scoped call is made before
-   that, so no tenant data loads before selection. */
+   tenant stays null until the user picks an entry: no tenant-scoped
+   call is made before that, so no tenant data loads before
+   selection. Picker-first flow (Hayden, 2026-11-25): sign-in never
+   resolves a tenant on its own, however many served memberships the
+   account holds; every sign-in lands on the picker, the HWHQ Choose
+   pattern. */
 let hubMemberships = [];
 let hubPickerEntries = [];
 let hubActiveTenant = null;
@@ -419,9 +422,17 @@ function renderAuthPanel(){
   }
   updateSwitchBrandVisibility();
 }
+/* The Switch brand control is the in-hub route back to the picker.
+   It originally showed only for multi-brand accounts, when the
+   picker was a multi-brand-only screen. Under the picker-first flow
+   (2026-11-25) every signed-in user lands on the picker, so the
+   control shows whenever at least one served brand exists: hiding
+   it from a single-brand user would leave sign-out as their only
+   route back to a screen they now pass through at every sign-in.
+   HWHQ renders its Switch HQ control the same way. */
 function updateSwitchBrandVisibility(){
   if(!switchBrandBtn) return;
-  const show = hubPickerEntries.length > 1 && hubAuthStateName !== 'signed-out';
+  const show = hubPickerEntries.length > 0 && hubAuthStateName !== 'signed-out';
   switchBrandBtn.classList.toggle('hidden', !show);
 }
 function getHubPickerEntries(){ return hubPickerEntries; }
@@ -485,11 +496,11 @@ async function checkHubSession(fetchFn){
       const servedSet = served && served.length ? served : (cfg.tenant_slug ? [cfg.tenant_slug] : []);
       hubPickerEntries = tenants.filter(t => servedSet.includes(t.tenant));
       if(!hubPickerEntries.length){ setHubAuthState('denied'); }
-      else if(hubPickerEntries.length === 1){
-        hubActiveTenant = hubPickerEntries[0].tenant;
-        setHubAuthState('signed-in', { email: body.email || '', tenants });
-        await loadHubState(hubActiveTenant, doFetch);
-      } else {
+      else {
+        /* Picker-first flow (Hayden, 2026-11-25): at least one served
+           membership always lands on the picker, even a single one.
+           The brand's state loads only when its entry is picked
+           (selectPickerTenant), never here. */
         hubActiveTenant = null;
         setHubAuthState('picker', { email: body.email || '', tenants });
         await loadPickerBadges(doFetch);
@@ -550,7 +561,11 @@ function pickerEntriesHtml(){
   return hubPickerEntries.map(e => {
     const badge = e.badge > 0 ? `<span class="picker-badge">${e.badge} answer${e.badge === 1 ? '' : 's'} waiting</span>` : '';
     const status = e.entitlementStatus ? `<span class="picker-status">${esc(e.entitlementStatus)}</span>` : '';
-    return `<button type="button" class="picker-entry" data-picker-tenant="${esc(e.tenant)}"><strong>${esc(e.name || e.tenant)}</strong>${status}<span class="picker-role">${esc(e.role || 'member')}</span>${badge}</button>`;
+    /* Entry face (picker-first build, 2026-11-25): name and status
+       lead, the HWHQ Choose pattern. The role is not rendered here;
+       it stays in the entry data and in the Secure Access panel's
+       Roles line. */
+    return `<button type="button" class="picker-entry" data-picker-tenant="${esc(e.tenant)}"><strong>${esc(e.name || e.tenant)}</strong>${status}${badge}</button>`;
   }).join('');
 }
 /* The picker is a focused screen in the menu's style, reached through
@@ -562,9 +577,41 @@ function renderTenantPicker(){
   hubFocusScreen = null;
   return setFocus('Choose your brand', 'Your HaydenWorks brands and projects', 'Pick the brand or project you want to open. Nothing from a brand loads until you choose it.', `<div class="picker-list">${pickerEntriesHtml()}</div>`);
 }
-/* Switch path: re-open the picker with refreshed badges. The session
-   token is never touched here; switching brands is not signing out. */
+/* Switch refresh (picker-first build, 2026-11-25): re-resolve the
+   memberships through /api/me, the same resolution the session check
+   runs, so names and statuses on the picker are current when it
+   re-opens (the HWHQ Switch pattern). A failed refresh, or one that
+   resolves to no served entry, keeps the last known entries rather
+   than stranding a signed-in user on an empty picker; a good
+   refresh replaces the entries wholesale and the badges are re-read
+   against them by loadPickerBadges. */
+async function refreshPickerEntries(fetchFn){
+  const cfg = authConfig();
+  if(!cfg || !cfg.client_hub_api_base || !hubSessionToken) return hubPickerEntries;
+  const doFetch = fetchFn || (typeof window !== 'undefined' ? window.fetch : null);
+  if(!doFetch) return hubPickerEntries;
+  try{
+    const res = await doFetch(`${cfg.client_hub_api_base}/api/me`, { headers: { Authorization: `Bearer ${hubSessionToken}` } });
+    if(res.status !== 200) return hubPickerEntries;
+    let body = {};
+    try{ body = await res.json(); }catch(e){ body = {}; }
+    const tenants = Array.isArray(body.tenants) ? body.tenants : [];
+    const served = await servedTenantSlugs(doFetch, cfg);
+    const servedSet = served && served.length ? served : (cfg.tenant_slug ? [cfg.tenant_slug] : []);
+    const entries = tenants.filter(t => servedSet.includes(t.tenant));
+    if(entries.length){
+      hubMemberships = tenants;
+      hubPickerEntries = entries;
+      if(hubAuthIdentity) hubAuthIdentity = { email: body.email || hubAuthIdentity.email || '', tenants };
+    }
+  }catch(e){ /* keep the last known entries */ }
+  return hubPickerEntries;
+}
+/* Switch path: re-resolve the memberships, refresh the badges, and
+   re-open the picker. The session token is never touched here;
+   switching brands is not signing out. */
 async function showTenantPicker(fetchFn){
+  await refreshPickerEntries(fetchFn || null);
   await loadPickerBadges(fetchFn || null);
   renderTenantPicker();
   return hubPickerEntries;
