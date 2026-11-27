@@ -254,10 +254,18 @@ function renderFocus(screen, origin){
       ${gallery(N.concept_assets)}`);
   }
   if(screen === 'website'){
-    return setFocus('Website Build', 'Google Sites asset', 'The published website is connected from the verified Hub configuration. The editable Google Sites build stays internal.', `
+    /* Tenant-state website URL build (2026-11-27): the published site
+       URL is the signed-in tenant's own links.site_public from their
+       loaded state, never a shared config value (the hub-config
+       client_website_url key is gone). A state with no URL renders
+       the neutral not-connected card; there is no fallback. */
+    const publishedCard = external(L.site_public)
+      ? `<article class="card"><h2>Published website</h2><p>The published website recorded for this workspace.</p><div class="link-list">${linkCard('Open Published Website','Public site',L.site_public)}${linkCard('Open Google Sites Build','Editable Google Sites asset, internal only',L.site_edit)}</div></article>`
+      : `<article class="card"><h2>Published website</h2><p>No website is connected to this workspace yet. When your site is published, its link will appear here.</p><div class="link-list">${linkCard('Open Google Sites Build','Editable Google Sites asset, internal only',L.site_edit)}</div></article>`;
+    return setFocus('Website Build', 'Google Sites asset', 'The published website and the internal site build for this workspace. The editable Google Sites build stays internal.', `
       <div class="screen-grid">
-        <article class="card"><h2>Published website</h2><p>The public published URL was confirmed by Hayden on 2026-11-18 and is carried in the Hub configuration.</p><div class="link-list">${linkCard('Open Published Website','Public site',CONFIG.client_website_url)}${linkCard('Open Google Sites Build','Editable Google Sites asset, internal only',L.site_edit)}</div></article>
-        <article class="card"><h2>Before external release</h2>${checks(['Published URL confirmed in Hub configuration','Confirm client access expectations','Keep edit/admin access internal unless intentionally shared'], true)}</article>
+        ${publishedCard}
+        <article class="card"><h2>Before external release</h2>${checks(['Published URL recorded in this workspace','Confirm client access expectations','Keep edit/admin access internal unless intentionally shared'], true)}</article>
       </div>`);
   }
   if(screen === 'documents'){
